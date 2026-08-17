@@ -1,0 +1,199 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+  <defs>
+    <!-- Premium Instagram-inspired gradient -->
+    <linearGradient id="backgroundGradient"
+      x1="120"
+      y1="900"
+      x2="900"
+      y2="100"
+      gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFB52E"/>
+      <stop offset="28%" stop-color="#FF7043"/>
+      <stop offset="55%" stop-color="#ED3B91"/>
+      <stop offset="78%" stop-color="#C832C9"/>
+      <stop offset="100%" stop-color="#635BFF"/>
+    </linearGradient>
+
+    <!-- Very subtle highlight -->
+    <radialGradient id="highlightGradient"
+      cx="0"
+      cy="0"
+      r="1"
+      gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(350 280) rotate(45) scale(600)">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Soft shadow -->
+    <filter id="shadow"
+      x="-20%"
+      y="-20%"
+      width="140%"
+      height="150%"
+      color-interpolation-filters="sRGB">
+      <feDropShadow
+        dx="0"
+        dy="22"
+        stdDeviation="28"
+        flood-color="#000000"
+        flood-opacity="0.18"/>
+    </filter>
+
+    <!-- White glyph shadow -->
+    <filter id="glyphShadow"
+      x="-20%"
+      y="-20%"
+      width="140%"
+      height="140%">
+      <feDropShadow
+        dx="0"
+        dy="5"
+        stdDeviation="8"
+        flood-color="#000000"
+        flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!--
+    ICON
+    Transparent canvas outside the rounded square.
+  -->
+
+  <g filter="url(#shadow)">
+
+    <!-- Main squircle -->
+    <rect
+      x="72"
+      y="72"
+      width="880"
+      height="880"
+      rx="210"
+      fill="url(#backgroundGradient)"
+    />
+
+    <!-- Subtle glass/highlight layer -->
+    <rect
+      x="72"
+      y="72"
+      width="880"
+      height="880"
+      rx="210"
+      fill="url(#highlightGradient)"
+    />
+
+  </g>
+
+
+  <!-- ========================= -->
+  <!-- CLOCK -->
+  <!-- ========================= -->
+
+  <g
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    filter="url(#glyphShadow)"
+  >
+
+    <!-- Clock outer arc -->
+    <path
+      d="
+        M 570 252
+        A 290 290 0 1 0 555 794
+      "
+      stroke-width="52"
+    />
+
+    <!-- Clock hand - hour -->
+    <path
+      d="
+        M 512 350
+        V 508
+        L 405 615
+      "
+      stroke-width="48"
+    />
+
+    <!-- Scheduling dots -->
+    <path
+      d="M 650 286 L 650 286"
+      stroke-width="42"
+    />
+
+    <path
+      d="M 704 334 L 704 334"
+      stroke-width="42"
+    />
+
+    <path
+      d="M 744 396 L 744 396"
+      stroke-width="42"
+    />
+
+    <path
+      d="M 765 466 L 765 466"
+      stroke-width="42"
+    />
+
+  </g>
+
+
+  <!-- ========================= -->
+  <!-- POST / IMAGE CARD -->
+  <!-- ========================= -->
+
+  <g
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    filter="url(#glyphShadow)"
+  >
+
+    <!-- Image card -->
+    <rect
+      x="585"
+      y="548"
+      width="270"
+      height="250"
+      rx="62"
+      stroke-width="46"
+    />
+
+    <!-- Mountain -->
+    <path
+      d="
+        M 625 735
+        L 700 655
+        L 750 705
+        L 790 665
+        L 820 695
+      "
+      stroke-width="38"
+    />
+
+    <!-- Sun -->
+    <circle
+      cx="786"
+      cy="626"
+      r="19"
+      fill="#FFFFFF"
+      stroke="none"
+    />
+
+  </g>
+
+
+  <!-- Small scheduling indicator -->
+  <circle
+    cx="550"
+    cy="795"
+    r="18"
+    fill="#FFFFFF"
+    opacity="0.95"
+  />
+
+</svg>

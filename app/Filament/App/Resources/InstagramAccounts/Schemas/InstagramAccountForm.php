@@ -41,7 +41,7 @@ class InstagramAccountForm
                                 ->password()
                                 ->revealable()
                                 ->required()
-                                ->helperText('"Instagram ile Bağlan" akışı bu alanı otomatik doldurur.')
+                                ->helperText('Meta Dashboard > Instagram > API setup > "Generate access token" butonundan alın. Kısa ömürlü token yapıştırsanız da sistem otomatik 60 günlük uzun ömürlü jetona çevirir.')
                                 ->columnSpanFull(),
                         ]),
                     ]),
