@@ -61,6 +61,14 @@ class Team extends Model implements HasCurrentTenantLabel
         return $this->hasMany(InstagramAccount::class);
     }
 
+    /**
+     * Domain 1 — Link Vault: Bu hesaba bağlı affiliate ürünleri.
+     */
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
+    }
+
     public function getCurrentTenantLabel(): string
     {
         return 'Hesap';
