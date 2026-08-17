@@ -1,0 +1,274 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\InstagramAccount;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Http;
+use RuntimeException;
+
+class InstagramPublishingService
+{
+    /**
+     * @param  int  $statusAttempts  How many times to poll a container's status (once per minute, max 5).
+     * @param  int  $statusSleepMs  Milliseconds to wait between container status polls.
+     */
+    public function __construct(
+        protected string $token,
+        protected string $apiVersion = 'v25.0',
+        protected string $host = 'graph.facebook.com',
+        protected string $ruploadHost = 'rupload.facebook.com',
+        protected int $timeout = 30,
+        protected int $connectTimeout = 10,
+        protected int $uploadTimeout = 600,
+        protected int $statusAttempts = 5,
+        protected int $statusSleepMs = 60000,
+    ) {}
+
+    /**
+     * Hesap bazlı istemci: yalnızca bu hesabın kendi jetonu ve host'u
+     * kullanılır. Global/jeton düşme (fallback) YOKTUR; jetonsuz hesap
+     * açık bir hata fırlatır.
+     */
+    public static function forAccount(InstagramAccount $account): static
+    {
+        if (empty($account->access_token)) {
+            throw new RuntimeException("@{$account->username} hesabının erişim jetonu yok; önce hesabı bağlayın.");
+        }
+
+        return new static(
+            token: $account->access_token,
+            apiVersion: (string) config('instagram.api_version'),
+            host: (string) $account->api_host,
+            ruploadHost: (string) config('instagram.rupload_host'),
+            timeout: (int) config('instagram.timeout'),
+            connectTimeout: (int) config('instagram.connect_timeout'),
+            uploadTimeout: (int) config('instagram.upload_timeout'),
+            statusAttempts: (int) config('instagram.status_attempts'),
+            statusSleepMs: (int) config('instagram.status_sleep'),
+        );
+    }
+
+    public function getToken(): string
+    {
+        return $this->token;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function createMediaContainer(string $igUserId, array $payload): array
+    {
+        $data = array_merge([
+            'access_token' => $this->token,
+        ], $payload);
+
+        $response = $this->http()->post("https://{$this->host}/{$this->apiVersion}/{$igUserId}/media", $data);
+
+        return $response->throw()->json();
+    }
+
+    /**
+     * Create a media container for a local or publicly hosted video that
+     * will be uploaded over a resumable upload session.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function createResumableUploadSession(string $igUserId, string $mediaType, array $payload = []): array
+    {
+        return $this->createMediaContainer($igUserId, array_merge($payload, [
+            'media_type' => $mediaType,
+            'upload_type' => 'resumable',
+        ]));
+    }
+
+    /**
+     * @param  array<string, mixed>  $children  Container IDs of the carousel items.
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function createCarouselContainer(string $igUserId, array $children, array $payload = []): array
+    {
+        $data = array_merge([
+            'access_token' => $this->token,
+            'media_type' => 'CAROUSEL',
+            'children' => implode(',', $children),
+        ], $payload);
+
+        $response = $this->http()->post("https://{$this->host}/{$this->apiVersion}/{$igUserId}/media", $data);
+
+        return $response->throw()->json();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function publishMedia(string $igUserId, string $creationId): array
+    {
+        $response = $this->http()->post("https://{$this->host}/{$this->apiVersion}/{$igUserId}/media_publish", [
+            'access_token' => $this->token,
+            'creation_id' => $creationId,
+        ]);
+
+        return $response->throw()->json();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getContainerStatus(string $containerId): array
+    {
+        $response = $this->http()->get("https://{$this->host}/{$this->apiVersion}/{$containerId}", [
+            'fields' => 'status_code',
+            'access_token' => $this->token,
+        ]);
+
+        return $response->throw()->json();
+    }
+
+    /**
+     * Poll a video container's status until it is ready to be published.
+     * Meta recommends polling once per minute, for no more than 5 minutes.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws RuntimeException When the container errors, expires, or never finishes in time.
+     */
+    public function waitForContainerToFinish(string $containerId): array
+    {
+        return retry($this->statusAttempts, function () use ($containerId): array {
+            $status = $this->getContainerStatus($containerId);
+            $statusCode = $status['status_code'] ?? 'unknown';
+
+            if (in_array($statusCode, ['FINISHED', 'PUBLISHED'], true)) {
+                return $status;
+            }
+
+            throw new RuntimeException(
+                "Instagram container {$containerId} is not ready to publish (status: {$statusCode}).",
+            );
+        }, $this->statusSleepMs);
+    }
+
+    /**
+     * Hesap profil bilgilerini getirir.
+     *
+     * @param  array<int, string>  $fields
+     * @return array<string, mixed>
+     */
+    public function getAccount(string $igUserId, array $fields = [
+        'username',
+        'name',
+        'account_type',
+        'biography',
+        'website',
+        'followers_count',
+        'media_count',
+        'profile_picture_url',
+    ]): array
+    {
+        $response = $this->http()->get("https://{$this->host}/{$this->apiVersion}/{$igUserId}", [
+            'fields' => implode(',', $fields),
+            'access_token' => $this->token,
+        ]);
+
+        return $response->throw()->json();
+    }
+
+    /**
+     * Hesabın yayınlanmış medyalarını getirir.
+     *
+     * @return array<string, mixed>
+     */
+    public function getAccountMedia(string $igUserId, int $limit = 25): array
+    {
+        $response = $this->http()->get("https://{$this->host}/{$this->apiVersion}/{$igUserId}/media", [
+            'fields' => 'id,caption,media_type,media_url,permalink,thumbnail_url,timestamp,like_count,comments_count',
+            'limit' => $limit,
+            'access_token' => $this->token,
+        ]);
+
+        return $response->throw()->json();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getPublishingLimit(string $igUserId): array
+    {
+        $response = $this->http()->get("https://{$this->host}/{$this->apiVersion}/{$igUserId}/content_publishing_limit", [
+            'access_token' => $this->token,
+        ]);
+
+        return $response->throw()->json();
+    }
+
+    /**
+     * Whether the account still has API publishing quota left for the
+     * current 24-hour moving period (carousels count as a single post).
+     */
+    public function isWithinPublishingLimit(string $igUserId): bool
+    {
+        $limit = $this->getPublishingLimit($igUserId);
+        $entry = $limit['data'][0] ?? throw new RuntimeException('Instagram yayın limiti bilgisi alınamadı.');
+
+        $quotaUsed = (int) ($entry['quota_used'] ?? throw new RuntimeException('Instagram yayın limiti bilgisi eksik (quota_used).'));
+        $quotaTotal = (int) ($entry['quota_total'] ?? throw new RuntimeException('Instagram yayın limiti bilgisi eksik (quota_total).'));
+
+        return $quotaUsed < $quotaTotal;
+    }
+
+    /**
+     * Upload a local video file to a resumable upload session container.
+     *
+     * @return array<string, mixed>
+     */
+    public function uploadVideoFile(string $containerId, string $filePath, int $offset = 0): array
+    {
+        $fileSize = filesize($filePath);
+
+        if ($fileSize === false) {
+            throw new RuntimeException("Unable to determine the size of {$filePath}.");
+        }
+
+        $response = $this->http($this->uploadTimeout)
+            ->withHeaders([
+                'Authorization' => "OAuth {$this->token}",
+                'offset' => (string) $offset,
+                'file_size' => (string) $fileSize,
+            ])
+            ->withBody(
+                file_get_contents($filePath) ?: '',
+                'application/octet-stream',
+            )
+            ->post("https://{$this->ruploadHost}/ig-api-upload/{$this->apiVersion}/{$containerId}");
+
+        return $response->throw()->json();
+    }
+
+    /**
+     * Upload a publicly hosted video to a resumable upload session container.
+     *
+     * @return array<string, mixed>
+     */
+    public function uploadVideoFromUrl(string $containerId, string $fileUrl): array
+    {
+        $response = $this->http($this->uploadTimeout)
+            ->withHeaders([
+                'Authorization' => "OAuth {$this->token}",
+                'file_url' => $fileUrl,
+            ])
+            ->post("https://{$this->ruploadHost}/ig-api-upload/{$this->apiVersion}/{$containerId}");
+
+        return $response->throw()->json();
+    }
+
+    protected function http(?int $timeout = null): PendingRequest
+    {
+        return Http::acceptJson()
+            ->timeout($timeout ?? $this->timeout)
+            ->connectTimeout($this->connectTimeout);
+    }
+}
