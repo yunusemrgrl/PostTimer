@@ -58,6 +58,11 @@ it('lists only the current tenants instagram posts', function () {
 });
 
 it('associates newly created posts with the current tenant', function () {
+    InstagramAccount::factory()
+        ->for($this->team)
+        ->withToken('account-token')
+        ->create(['ig_user_id' => '90010177253934']);
+
     bootTenantPanel($this->team);
 
     Livewire::test(CreateInstagramPost::class)

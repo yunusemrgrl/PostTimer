@@ -50,6 +50,8 @@ function connectInstagramAccount(Team $team, string $igUserId = '90010177253934'
 }
 
 it('schedules a post when a future date is chosen in the form', function () {
+    connectInstagramAccount($this->team, '90010177253934');
+
     bootTenantPanelFor($this->team);
 
     Livewire::test(CreateInstagramPost::class)
@@ -72,6 +74,8 @@ it('schedules a post when a future date is chosen in the form', function () {
 });
 
 it('keeps a post as draft when no date is chosen', function () {
+    connectInstagramAccount($this->team, '90010177253934');
+
     bootTenantPanelFor($this->team);
 
     Livewire::test(CreateInstagramPost::class)

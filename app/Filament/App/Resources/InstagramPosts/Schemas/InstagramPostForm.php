@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\InstagramPosts\Schemas;
 
 use App\Models\InstagramPost;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -23,10 +24,17 @@ class InstagramPostForm
                 Section::make('Gönderi')
                     ->schema([
                         Grid::make(2)->schema([
-                            TextInput::make('ig_user_id')
-                                ->label('Instagram Hesap ID')
+                            Select::make('ig_user_id')
+                                ->label('Instagram Hesabı')
+                                ->options(function (): array {
+                                    return Filament::getTenant()
+                                        ?->instagramAccounts()
+                                        ->pluck('username', 'ig_user_id')
+                                        ->map(fn (?string $username) => $username ? '@'.$username : 'Bilinmeyen hesap')
+                                        ->all() ?? [];
+                                })
+                                ->searchable()
                                 ->required()
-                                ->maxLength(64)
                                 ->columnSpan(1),
 
                             Select::make('media_type')
