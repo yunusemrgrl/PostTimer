@@ -14,7 +14,7 @@ Route::get('/data-deletion', fn () => view('data-deletion'))->name('data-deletio
  * Business Login for Instagram akışı. State (CSRF) oturumda
  * tutulduğu için bu rotalar web (session) middleware'indedir.
  */
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'throttle:10,1'])->group(function () {
     Route::get('/instagram/connect/{tenant:slug}', [InstagramConnectController::class, 'redirect'])
         ->name('instagram.connect');
 
