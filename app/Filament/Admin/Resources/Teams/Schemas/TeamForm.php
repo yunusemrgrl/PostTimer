@@ -4,6 +4,7 @@ namespace App\Filament\Admin\Resources\Teams\Schemas;
 
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Str;
 
@@ -17,7 +18,7 @@ class TeamForm
                 ->required()
                 ->maxLength(255)
                 ->live(onBlur: true)
-                ->afterStateUpdated(function (string $operation, ?string $state, callable $set) {
+                ->afterStateUpdated(function (string $operation, ?string $state, Set $set) {
                     if ($operation === 'create') {
                         $set('slug', Str::slug($state));
                     }

@@ -7,6 +7,9 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::get('/privacy-policy', fn () => view('privacy-policy'))->name('privacy-policy');
+Route::get('/data-deletion', fn () => view('data-deletion'))->name('data-deletion');
+
 /*
  * Business Login for Instagram akışı. State (CSRF) oturumda
  * tutulduğu için bu rotalar web (session) middleware'indedir.

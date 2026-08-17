@@ -2,7 +2,12 @@
 .DS_Store
 .env
 .env.backup
+.env.local
 .env.production
+.env.*.local
+fly.toml.bak
+*.pem
+*.key
 .phpactor.json
 .phpunit.result.cache
 /.codex

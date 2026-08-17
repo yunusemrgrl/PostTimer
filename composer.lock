@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "74690993648aaea8dc6c6564714ad560",
+    "content-hash": "58d01a7700b45e94562a307ad90fddba",
     "packages": [
         {
             "name": "anourvalar/eloquent-serialize",
@@ -9564,6 +9564,77 @@
                 "source": "https://github.com/laravel/roster"
             },
             "time": "2026-07-18T17:53:15+00:00"
+        },
+        {
+            "name": "laraveldaily/filacheck",
+            "version": "v1.2.5",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/LaravelDaily/FilaCheck.git",
+                "reference": "8e2311338d112b9ed35b9f5718690990b891a489"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/LaravelDaily/FilaCheck/zipball/8e2311338d112b9ed35b9f5718690990b891a489",
+                "reference": "8e2311338d112b9ed35b9f5718690990b891a489",
+                "shasum": ""
+            },
+            "require": {
+                "filament/filament": "^4.0|^5.0",
+                "nikic/php-parser": "^5.0",
+                "php": "^8.2",
+                "symfony/console": "^6.0|^7.0|^8.0",
+                "symfony/process": "^6.0|^7.0|^8.0"
+            },
+            "require-dev": {
+                "laravel/boost": "^2.5",
+                "orchestra/testbench": "^9.0|^10.0|^11.0",
+                "pestphp/pest": "^3.0|^4.0|^5.0"
+            },
+            "suggest": {
+                "laraveldaily/filacheck-pro": "Unlock performance rules, best practices checks, and more advanced static analysis"
+            },
+            "bin": [
+                "bin/filacheck"
+            ],
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Filacheck\\FilacheckServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Filacheck\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Povilas Korop",
+                    "email": "povilas@laraveldaily.com"
+                }
+            ],
+            "description": "Static analysis for Filament projects - detect deprecated patterns and code issues",
+            "homepage": "https://github.com/LaravelDaily/filacheck",
+            "keywords": [
+                "code-quality",
+                "filament",
+                "laravel",
+                "lint",
+                "livewire",
+                "static-analysis"
+            ],
+            "support": {
+                "issues": "https://github.com/LaravelDaily/FilaCheck/issues",
+                "source": "https://github.com/LaravelDaily/FilaCheck/tree/v1.2.5"
+            },
+            "time": "2026-08-06T08:22:19+00:00"
         },
         {
             "name": "mockery/mockery",
