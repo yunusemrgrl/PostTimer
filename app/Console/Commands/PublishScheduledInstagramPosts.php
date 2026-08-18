@@ -2,19 +2,25 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\PublishScheduledPost;
 use App\Models\InstagramPost;
-use App\Services\NotificationService;
-use App\Services\PublishInstagramPostService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
-use Throwable;
 
+/**
+ * Zamanı gelmiş postları bulur ve her biri için ayrı bir
+ * PublishScheduledPost job'ı dispatch eder. Yayın async çalışır —
+ * komut 1 saniye içinde biter, worker'lar paralel yayınlar.
+ *
+ * Idempotency: ShouldBeUnique job ID sayesinde aynı post iki kez
+ * dispatch edilse bile kuyrukta tek job kalır.
+ */
 #[Signature('instagram:publish-scheduled')]
-#[Description('Zamanı gelmiş zamanlanmış Instagram gönderilerini yayınlar')]
+#[Description('Zamanı gelmiş postları kuyruğa dispatch eder (async publish)')]
 class PublishScheduledInstagramPosts extends Command
 {
-    public function handle(PublishInstagramPostService $publisher, NotificationService $notifier): int
+    public function handle(): int
     {
         $duePosts = InstagramPost::query()
             ->where('status', InstagramPost::STATUS_SCHEDULED)
@@ -28,34 +34,17 @@ class PublishScheduledInstagramPosts extends Command
             return self::SUCCESS;
         }
 
-        $published = 0;
-        $failed = 0;
+        $dispatched = 0;
 
         foreach ($duePosts as $post) {
-            try {
-                $publisher->publish($post);
-                $published++;
+            PublishScheduledPost::dispatch($post);
+            $dispatched++;
 
-                $this->info("Yayınlandı: [#{$post->id}] {$post->caption}");
-            } catch (Throwable $exception) {
-                $failed++;
-
-                // Domain 4: Telegram uyarısı
-                $notifier->notifyPublishFailed(
-                    $post->team,
-                    $post->caption ?? 'Gönderi #'.$post->id,
-                    $exception->getMessage(),
-                );
-
-                $this->error("Yayınlanamadı: [#{$post->id}] {$exception->getMessage()}");
-            }
+            $this->info("Kuyruğa dispatch edildi: [#{$post->id}] {$post->caption}");
         }
 
-        $this->table(['Durum', 'Adet'], [
-            ['Yayınlandı', $published],
-            ['Başarısız', $failed],
-        ]);
+        $this->info("Toplam {$dispatched} gönderi kuyruğa dispatch edildi.");
 
-        return $failed > 0 ? self::FAILURE : self::SUCCESS;
+        return self::SUCCESS;
     }
 }

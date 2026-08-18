@@ -15,6 +15,8 @@ class InstagramPost extends Model
 
     public const STATUS_SCHEDULED = 'scheduled';
 
+    public const STATUS_PUBLISHING = 'publishing';
+
     public const STATUS_PUBLISHED = 'published';
 
     public const STATUS_FAILED = 'failed';
@@ -73,8 +75,10 @@ class InstagramPost extends Model
         return [
             self::STATUS_DRAFT => 'Taslak',
             self::STATUS_SCHEDULED => 'Zamanlandı',
+            self::STATUS_PUBLISHING => 'Yayınlanıyor',
             self::STATUS_PUBLISHED => 'Yayınlandı',
             self::STATUS_FAILED => 'Başarısız',
+            self::STATUS_FLAGGED => 'Uyarıldı',
         ];
     }
 
@@ -99,6 +103,7 @@ class InstagramPost extends Model
         return match ($status) {
             self::STATUS_PUBLISHED => 'success',
             self::STATUS_SCHEDULED => 'info',
+            self::STATUS_PUBLISHING => 'warning',
             self::STATUS_FAILED => 'danger',
             self::STATUS_FLAGGED => 'warning',
             default => 'gray',
@@ -108,6 +113,36 @@ class InstagramPost extends Model
     public function isScheduled(): bool
     {
         return $this->status === self::STATUS_SCHEDULED;
+    }
+
+    public function isFlagged(): bool
+    {
+        return $this->status === self::STATUS_FLAGGED;
+    }
+
+    public function isPublishing(): bool
+    {
+        return $this->status === self::STATUS_PUBLISHING;
+    }
+
+    public function isPublished(): bool
+    {
+        return $this->status === self::STATUS_PUBLISHED;
+    }
+
+    /**
+     * Idempotency Pattern 1 — Atomic Claim:
+     * Postu verilen kaynak durumdan "publishing" durumuna atomik geçirir.
+     * Başka bir worker aynı postu almaya çalışırsa 0 döner → çift yayın engellenir.
+     *
+     * @param  array<int, string>  $fromStatuses
+     */
+    public function atomicClaim(array $fromStatuses = [self::STATUS_SCHEDULED, self::STATUS_DRAFT]): bool
+    {
+        return (bool) static::query()
+            ->where('id', $this->id)
+            ->whereIn('status', $fromStatuses)
+            ->update(['status' => self::STATUS_PUBLISHING]) > 0;
     }
 
     /**

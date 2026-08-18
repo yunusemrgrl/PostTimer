@@ -1,5 +1,6 @@
 <?php
 
+use App\Events\PostPublished;
 use App\Filament\App\Resources\InstagramPosts\Pages\CreateInstagramPost;
 use App\Filament\App\Resources\InstagramPosts\Pages\ListInstagramPosts;
 use App\Models\InstagramAccount;
@@ -10,12 +11,17 @@ use App\Models\User;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
 use function Pest\Laravel\assertDatabaseHas;
 
 uses(RefreshDatabase::class);
+
+beforeEach(function () {
+    Event::fake([PostPublished::class]);
+});
 
 /**
  * Test verisi (factory) her zaman panel boot edilmeden ÖNCE oluşturulmalı;

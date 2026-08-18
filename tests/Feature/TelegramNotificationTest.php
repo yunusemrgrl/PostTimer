@@ -9,6 +9,7 @@ use App\Models\TelegramSetting;
 use App\Models\User;
 use App\Services\TelegramBotService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 
 uses(RefreshDatabase::class);
@@ -74,7 +75,12 @@ it('sends a telegram message when publishing fails', function () {
         '*' => Http::response(),
     ]);
 
-    Artisan::call('instagram:publish-scheduled');
+    // sync queue'da job exception yayılır — bekleniyor
+    try {
+        Artisan::call('instagram:publish-scheduled');
+    } catch (Throwable) {
+        // Yayın başarısız oldu — beklenen davranış
+    }
 
     Http::assertSent(function ($request) {
         return str_contains($request->url(), 'api.telegram.org/bot')
@@ -83,8 +89,6 @@ it('sends a telegram message when publishing fails', function () {
 });
 
 it('does not send telegram when settings are not configured', function () {
-    Http::fake(['*' => Http::response()]);
-
     $product = Product::factory()->for($this->team)->create();
 
     $post = InstagramPost::factory()->for($this->team)->create([

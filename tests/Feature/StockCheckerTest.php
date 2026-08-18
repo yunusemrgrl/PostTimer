@@ -1,5 +1,6 @@
 <?php
 
+use App\Events\PostFlagged;
 use App\Models\InstagramPost;
 use App\Models\Product;
 use App\Models\Team;
@@ -8,6 +9,7 @@ use App\Models\User;
 use App\Services\AmazonStockChecker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 
 use function Pest\Laravel\assertDatabaseHas;
@@ -87,6 +89,8 @@ it('handles network errors gracefully', function () {
 });
 
 it('flags scheduled posts with out-of-stock products', function () {
+    Event::fake([PostFlagged::class]);
+
     Http::fake([
         'amazon.com.tr/*' => Http::response(
             '<html><body>Stok tükendi</body></html>'
@@ -110,6 +114,8 @@ it('flags scheduled posts with out-of-stock products', function () {
     ]);
 
     expect($post->fresh()->error_message)->toContain('stokta yok');
+
+    Event::assertDispatched(PostFlagged::class);
 });
 
 it('does not flag posts with in-stock products', function () {

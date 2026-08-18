@@ -2,24 +2,48 @@
 
 namespace App\Services;
 
+use App\Events\PostPublished;
+use App\Events\PostPublishFailed;
 use App\Models\InstagramAccount;
 use App\Models\InstagramPost;
+use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 use Throwable;
 
 /**
- * Bir InstagramPost kaydını Instagram'a yayınlar: medya konteyneri/leri
- * oluşturur, video işlemesinin tamamlanmasını bekler ve yayınlar. Durum
- * ve hata bilgisi her zaman kayda işlenir.
+ * Bir InstagramPost kaydını Instagram'a yayınlar. Tüm idempotency
+ * önlemleri burada uygulanır:
  *
- * API istemcisi her zaman gönderinin kendi hesabından (team_id +
- * ig_user_id eşleşmesi) kurulur; jeton yoksa işlem başlamaz.
+ * 1. Media ID Guard — zaten yayınlanmış post tekrar yayınlanmaz
+ * 2. Atomic Claim — scheduled/draft → publishing atomik geçiş (çift dispatch engeli)
+ * 3. Container Resume — worker çökse sonra tekrar denense, container yeniden oluşturulmaz
+ * 4. Cache Lock — aynı post için paralel worker engeli
+ * 5. Event Dispatch — yayın sonrası aksiyonlar (ilk yorum, Telegram) event ile tetiklenir
  */
 class PublishInstagramPostService
 {
+    private const LOCK_TIMEOUT = 300;
+
     public function publish(InstagramPost $post): InstagramPost
     {
-        if ($post->status === InstagramPost::STATUS_PUBLISHED) {
+        // Pattern 1: Media ID Guard — zaten yayınlanmış, atla
+        if ($post->media_id) {
+            PostPublished::dispatch($post->fresh());
+
+            return $post->fresh();
+        }
+
+        // Pattern 2: Atomic Claim — postu atomik olarak "publishing" durumuna al
+        // Başka bir worker aynı postu almışsa 0 döner → çift yayın engellenir
+        $post->refresh();
+        if (! $post->atomicClaim()) {
+            return $post;
+        }
+
+        // Pattern 4: Cache Lock — paralel worker koruması
+        $lock = Cache::lock("instagram-publish-{$post->id}", self::LOCK_TIMEOUT);
+
+        if (! $lock->get()) {
             return $post;
         }
 
@@ -30,7 +54,8 @@ class PublishInstagramPostService
                 throw new RuntimeException('Instagram 24 saatlik API yayın limiti doldu.');
             }
 
-            $containerId = $this->createContainer($post, $instagram);
+            // Pattern 3: Container Resume — container zaten varsa yeniden oluşturma
+            $containerId = $post->container_id ?: $this->createContainer($post, $instagram);
 
             if ($post->isVideo()) {
                 $instagram->waitForContainerToFinish($containerId);
@@ -47,17 +72,21 @@ class PublishInstagramPostService
                 'published_at' => now(),
             ])->save();
 
-            // Domain 2: Otomatik ilk yorum (Reels/Post/Karusel)
-            $this->postFirstComment($post, $instagram);
+            // Pattern 5: Event Dispatch — ilk yorum ve Telegram uyarısı event ile tetiklenir
+            PostPublished::dispatch($post->fresh());
 
-            return $post;
+            return $post->fresh();
         } catch (Throwable $exception) {
             $post->forceFill([
                 'status' => InstagramPost::STATUS_FAILED,
                 'error_message' => $exception->getMessage(),
             ])->save();
 
+            PostPublishFailed::dispatch($post->fresh(), $exception->getMessage());
+
             throw $exception;
+        } finally {
+            $lock->release();
         }
     }
 
@@ -83,28 +112,6 @@ class PublishInstagramPostService
         ])->save();
 
         return $post;
-    }
-
-    /**
-     * Domain 2: Yayınlandıktan sonra otomatik ilk yorumu atar.
-     * Hata olursa gönderi durumu "published" kalır; yorum ayrı bir concern.
-     */
-    protected function postFirstComment(InstagramPost $post, InstagramPublishingService $instagram): void
-    {
-        if (! $post->first_comment || $post->isStory()) {
-            return;
-        }
-
-        if (! $post->media_id) {
-            return;
-        }
-
-        try {
-            $instagram->createComment($post->media_id, $post->first_comment);
-        } catch (Throwable) {
-            // Yorum başarısız olsa da gönderi yayınlanmış sayılır.
-            // Domain 4 (Telegram) burada uyarı tetikleyebilir.
-        }
     }
 
     /**
@@ -140,7 +147,6 @@ class PublishInstagramPostService
             'is_ai_generated' => $post->is_ai_generated ?: null,
             'alt_text' => $post->alt_text !== null ? ['text' => $post->alt_text] : null,
             'media_type' => $post->media_type,
-            // Domain 2: Story → Link Sticker
             'story_link' => $post->isStory() ? $post->story_link : null,
             $post->isVideo() ? 'video_url' : 'image_url' => $post->media_url,
         ], fn ($value) => $value !== null));

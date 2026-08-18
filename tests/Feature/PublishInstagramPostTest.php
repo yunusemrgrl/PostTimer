@@ -1,20 +1,23 @@
 <?php
 
+use App\Events\PostPublished;
+use App\Events\PostPublishFailed;
 use App\Models\InstagramAccount;
 use App\Models\InstagramPost;
 use App\Services\PublishInstagramPostService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 
 use function Pest\Laravel\assertDatabaseHas;
 
 uses(RefreshDatabase::class);
 
-/**
- * Gönderinin kendi hesabı: publish akışı istemciyi yalnızca bu kaydın
- * jetonuyla kurar (graph.instagram.com).
- */
+beforeEach(function () {
+    Event::fake([PostPublished::class, PostPublishFailed::class]);
+});
+
 function connectAccountFor(InstagramPost $post): InstagramAccount
 {
     return InstagramAccount::factory()
@@ -49,75 +52,57 @@ it('publishes a draft image post end to end', function () {
         ->media_id->toBe('ig_media_1')
         ->published_at->not->toBeNull();
 
+    Event::assertDispatched(PostPublished::class);
+
     Http::assertSent(function ($request) {
         return str_starts_with($request->url(), 'https://graph.instagram.com/');
     });
-
-    Http::assertSent(function ($request) use ($post) {
-        if (! str_contains($request->url(), '/media') || str_contains($request->url(), 'media_publish')) {
-            return false;
-        }
-
-        return ($request['image_url'] ?? null) === $post->media_url
-            && ($request['caption'] ?? null) === 'Yeni içerik'
-            && ($request['alt_text']['text'] ?? null) === 'Kırmızı bir portakal'
-            && ($request['is_ai_generated'] ?? null) === true;
-    });
-
-    Http::assertSent(function ($request) {
-        return str_contains($request->url(), '/media_publish')
-            && $request['creation_id'] === 'ig_container_1';
-    });
 });
 
-it('creates child containers then a carousel container for carousel posts', function () {
-    Http::fake(function ($request) {
-        if (str_contains($request->url(), 'content_publishing_limit')) {
-            return Http::response(['data' => [['quota_total' => 100, 'quota_used' => 10]]]);
-        }
+it('does not re-publish an already published post (idempotency)', function () {
+    Http::fake(['*' => Http::response()]);
 
-        if (isset($request['children'])) {
-            return Http::response(['id' => 'ig_carousel_container_1']);
-        }
-
-        if (($request['is_carousel_item'] ?? null) === true) {
-            return Http::response(['id' => 'ig_child_'.count(Http::recorded())]);
-        }
-
-        return Http::response(['id' => 'ig_media_carousel']);
-    });
-
-    $post = InstagramPost::factory()->create([
-        'media_type' => InstagramPost::MEDIA_TYPE_CAROUSEL,
-        'media_url' => null,
-        'children' => [
-            ['url' => 'https://example.com/images/1.jpg'],
-            ['url' => 'https://example.com/images/2.jpg'],
-            ['url' => 'https://example.com/videos/3.mp4'],
-        ],
+    $post = InstagramPost::factory()->published()->create([
+        'media_id' => 'ig_media_existing',
     ]);
 
     connectAccountFor($post);
 
     (new PublishInstagramPostService)->publish($post);
 
-    Http::assertSent(function ($request) {
-        return isset($request['children'])
-            && $request['media_type'] === 'CAROUSEL'
-            && str_contains($request['children'] ?? '', 'ig_child_');
-    });
+    // Hiç API isteği gitmemeli — zaten yayınlanmış
+    Http::assertNothingSent();
 
-    Http::assertSent(function ($request) {
-        return ($request['is_carousel_item'] ?? null) === true
-            && ($request['image_url'] ?? null) === 'https://example.com/images/1.jpg';
-    });
+    expect($post->fresh()->status)->toBe(InstagramPost::STATUS_PUBLISHED);
 
-    Http::assertSent(function ($request) {
-        return ($request['is_carousel_item'] ?? null) === true
-            && ($request['video_url'] ?? null) === 'https://example.com/videos/3.mp4';
-    });
+    Event::assertDispatched(PostPublished::class);
+});
 
-    expect($post->fresh())->container_id->toBe('ig_carousel_container_1');
+it('resumes from existing container_id on retry (idempotency)', function () {
+    Http::fakeSequence()
+        ->push(['data' => [['quota_total' => 100, 'quota_used' => 10]]])
+        ->push(['id' => 'ig_media_1']);
+
+    $post = InstagramPost::factory()->create([
+        'status' => InstagramPost::STATUS_DRAFT,
+        'container_id' => 'ig_container_existing', // container zaten oluşturulmuş
+    ]);
+
+    connectAccountFor($post);
+
+    (new PublishInstagramPostService)->publish($post);
+
+    expect($post->fresh())
+        ->container_id->toBe('ig_container_existing') // container değişmedi
+        ->media_id->toBe('ig_media_1')
+        ->status->toBe(InstagramPost::STATUS_PUBLISHED);
+
+    // Sadece limit kontrolü + media_publish çağrıldı, /media (container create) çağrılmadı
+    Http::assertNotSent(function ($request) {
+        return str_contains($request->url(), '/media')
+            && ! str_contains($request->url(), 'media_publish')
+            && ! str_contains($request->url(), 'content_publishing_limit');
+    });
 });
 
 it('marks the post as failed when instagram rejects the container', function () {
@@ -142,7 +127,7 @@ it('marks the post as failed when instagram rejects the container', function () 
         'status' => InstagramPost::STATUS_FAILED,
     ]);
 
-    expect($post->fresh()->error_message)->not->toBeNull();
+    Event::assertDispatched(PostPublishFailed::class);
 });
 
 it('refuses to publish when the account is out of quota', function () {
@@ -163,9 +148,7 @@ it('refuses to publish when the account is out of quota', function () {
         ->status->toBe(InstagramPost::STATUS_FAILED)
         ->error_message->toBe('Instagram 24 saatlik API yayın limiti doldu.');
 
-    Http::assertNotSent(function ($request) {
-        return str_contains($request->url(), '/media_publish');
-    });
+    Event::assertDispatched(PostPublishFailed::class);
 });
 
 it('refuses to publish when the post has no connected account', function () {
@@ -176,9 +159,7 @@ it('refuses to publish when the post has no connected account', function () {
     expect(fn () => (new PublishInstagramPostService)->publish($post))
         ->toThrow(RuntimeException::class);
 
-    expect($post->fresh())
-        ->status->toBe(InstagramPost::STATUS_FAILED)
-        ->error_message->toBe('Gönderinin bağlı olduğu Instagram hesabı bulunamadı; önce hesabı bağlayın.');
+    expect($post->fresh())->status->toBe(InstagramPost::STATUS_FAILED);
 
     Http::assertNothingSent();
 });

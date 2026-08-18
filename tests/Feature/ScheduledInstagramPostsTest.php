@@ -1,7 +1,9 @@
 <?php
 
+use App\Events\PostPublished;
 use App\Filament\App\Resources\InstagramPosts\Pages\CreateInstagramPost;
 use App\Filament\App\Resources\InstagramPosts\Pages\ListInstagramPosts;
+use App\Jobs\PublishScheduledPost;
 use App\Models\InstagramAccount;
 use App\Models\InstagramPost;
 use App\Models\Team;
@@ -11,7 +13,9 @@ use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 
 use function Pest\Laravel\assertDatabaseHas;
@@ -93,33 +97,28 @@ it('keeps a post as draft when no date is chosen', function () {
 });
 
 it('publishes due scheduled posts and leaves future ones alone', function () {
+    Queue::fake();
+    Event::fake([PostPublished::class]);
+
     $due = InstagramPost::factory()->for($this->team)->due()->create();
     $future = InstagramPost::factory()->for($this->team)->scheduled()->create();
 
     connectInstagramAccount($this->team, $due->ig_user_id);
 
-    Http::fake([
-        'https://graph.instagram.com/*content_publishing_limit*' => Http::response([
-            'data' => [['quota_total' => 100, 'quota_used' => 10]],
-        ]),
-        'https://graph.instagram.com/*/media' => Http::response(['id' => 'ig_container_due']),
-        'https://graph.instagram.com/*/media_publish' => Http::response(['id' => 'ig_media_due']),
-        '*' => Http::response(),
-    ]);
-
     Artisan::call('instagram:publish-scheduled');
 
-    expect($due->fresh())
-        ->status->toBe(InstagramPost::STATUS_PUBLISHED)
-        ->media_id->toBe('ig_media_due')
-        ->scheduled_at->toBeNull();
+    // Due post için job dispatch edildi
+    Queue::assertPushed(PublishScheduledPost::class);
 
+    // Future post için job dispatch edilmedi
     expect($future->fresh())
         ->status->toBe(InstagramPost::STATUS_SCHEDULED)
         ->scheduled_at->not->toBeNull();
 });
 
 it('can publish a scheduled post immediately, skipping the queue', function () {
+    Event::fake([PostPublished::class]);
+
     $post = InstagramPost::factory()->for($this->team)->scheduled()->create();
 
     connectInstagramAccount($this->team, $post->ig_user_id);
@@ -144,6 +143,8 @@ it('can publish a scheduled post immediately, skipping the queue', function () {
         'status' => InstagramPost::STATUS_PUBLISHED,
         'media_id' => 'ig_media_1',
     ]);
+
+    Event::assertDispatched(PostPublished::class);
 });
 
 it('can cancel a schedule and return the post to draft', function () {
