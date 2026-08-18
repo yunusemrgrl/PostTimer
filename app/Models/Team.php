@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Team extends Model implements HasCurrentTenantLabel
 {
@@ -67,6 +68,14 @@ class Team extends Model implements HasCurrentTenantLabel
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);
+    }
+
+    /**
+     * Domain 4 — Bu hesaba bağlı Telegram bot ayarları.
+     */
+    public function telegramSetting(): HasOne
+    {
+        return $this->hasOne(TelegramSetting::class);
     }
 
     public function getCurrentTenantLabel(): string

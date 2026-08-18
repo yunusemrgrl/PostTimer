@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\InstagramPost;
 use App\Services\AmazonStockChecker;
+use App\Services\NotificationService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -22,7 +23,7 @@ class CheckScheduledPostStock extends Command
 {
     private const CHECK_WINDOW_MINUTES = 20;
 
-    public function handle(AmazonStockChecker $checker): int
+    public function handle(AmazonStockChecker $checker, NotificationService $notifier): int
     {
         $posts = InstagramPost::query()
             ->where('status', InstagramPost::STATUS_SCHEDULED)
@@ -56,6 +57,13 @@ class CheckScheduledPostStock extends Command
                 'status' => InstagramPost::STATUS_FLAGGED,
                 'error_message' => $result['message'],
             ])->save();
+
+            // Domain 4: Telegram uyarısı gönder
+            $notifier->notifyStockFlagged(
+                $post->team,
+                $post->caption ?? 'Gönderi #'.$post->id,
+                $result['message'],
+            );
 
             $flagged++;
             $this->warn("[#{$post->id}] UYARI: {$result['message']} — post flagged moduna alındı");

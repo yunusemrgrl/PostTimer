@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\InstagramPost;
+use App\Services\NotificationService;
 use App\Services\PublishInstagramPostService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -13,7 +14,7 @@ use Throwable;
 #[Description('Zamanı gelmiş zamanlanmış Instagram gönderilerini yayınlar')]
 class PublishScheduledInstagramPosts extends Command
 {
-    public function handle(PublishInstagramPostService $publisher): int
+    public function handle(PublishInstagramPostService $publisher, NotificationService $notifier): int
     {
         $duePosts = InstagramPost::query()
             ->where('status', InstagramPost::STATUS_SCHEDULED)
@@ -38,6 +39,13 @@ class PublishScheduledInstagramPosts extends Command
                 $this->info("Yayınlandı: [#{$post->id}] {$post->caption}");
             } catch (Throwable $exception) {
                 $failed++;
+
+                // Domain 4: Telegram uyarısı
+                $notifier->notifyPublishFailed(
+                    $post->team,
+                    $post->caption ?? 'Gönderi #'.$post->id,
+                    $exception->getMessage(),
+                );
 
                 $this->error("Yayınlanamadı: [#{$post->id}] {$exception->getMessage()}");
             }
