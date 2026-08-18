@@ -19,6 +19,8 @@ class InstagramPost extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    public const STATUS_FLAGGED = 'flagged';
+
     public const MEDIA_TYPE_IMAGE = 'IMAGE';
 
     public const MEDIA_TYPE_VIDEO = 'VIDEO';
@@ -98,6 +100,7 @@ class InstagramPost extends Model
             self::STATUS_PUBLISHED => 'success',
             self::STATUS_SCHEDULED => 'info',
             self::STATUS_FAILED => 'danger',
+            self::STATUS_FLAGGED => 'warning',
             default => 'gray',
         };
     }

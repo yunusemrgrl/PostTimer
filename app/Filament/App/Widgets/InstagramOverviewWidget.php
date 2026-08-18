@@ -40,6 +40,10 @@ class InstagramOverviewWidget extends StatsOverviewWidget
             ->where('status', InstagramPost::STATUS_FAILED)
             ->count();
 
+        $flagged = (clone $posts)
+            ->where('status', InstagramPost::STATUS_FLAGGED)
+            ->count();
+
         return [
             Stat::make('Bağlı Hesap', $accountCount)
                 ->description($followers.' takipçi')
@@ -56,9 +60,14 @@ class InstagramOverviewWidget extends StatsOverviewWidget
                 ->descriptionIcon('heroicon-m-clock')
                 ->color('info'),
 
+            Stat::make('Uyarıldı', $flagged)
+                ->description('stok kontrol uyarısı')
+                ->descriptionIcon('heroicon-m-exclamation-triangle')
+                ->color($flagged > 0 ? 'warning' : 'gray'),
+
             Stat::make('Başarısız', $failed)
                 ->description('tekrar denenebilir')
-                ->descriptionIcon('heroicon-m-exclamation-triangle')
+                ->descriptionIcon('heroicon-m-x-circle')
                 ->color($failed > 0 ? 'danger' : 'gray'),
         ];
     }

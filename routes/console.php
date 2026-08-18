@@ -17,6 +17,14 @@ Schedule::command('instagram:publish-scheduled')
     ->withoutOverlapping();
 
 /*
+ * Domain 3 — Yayına 20 dakika kalan postların bağlı ürünlerinin
+ * stok durumunu her 5 dakikada bir kontrol eder.
+ */
+Schedule::command('instagram:check-stock')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+/*
  * 7 gün içinde süresi dolacak uzun ömürlü Instagram jetonlarını
  * günlük olarak yeniler (60 gün daha).
  */
