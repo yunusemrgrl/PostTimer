@@ -47,6 +47,9 @@ class PublishInstagramPostService
                 'published_at' => now(),
             ])->save();
 
+            // Domain 2: Otomatik ilk yorum (Reels/Post/Karusel)
+            $this->postFirstComment($post, $instagram);
+
             return $post;
         } catch (Throwable $exception) {
             $post->forceFill([
@@ -83,6 +86,28 @@ class PublishInstagramPostService
     }
 
     /**
+     * Domain 2: Yayınlandıktan sonra otomatik ilk yorumu atar.
+     * Hata olursa gönderi durumu "published" kalır; yorum ayrı bir concern.
+     */
+    protected function postFirstComment(InstagramPost $post, InstagramPublishingService $instagram): void
+    {
+        if (! $post->first_comment || $post->isStory()) {
+            return;
+        }
+
+        if (! $post->media_id) {
+            return;
+        }
+
+        try {
+            $instagram->createComment($post->media_id, $post->first_comment);
+        } catch (Throwable) {
+            // Yorum başarısız olsa da gönderi yayınlanmış sayılır.
+            // Domain 4 (Telegram) burada uyarı tetikleyebilir.
+        }
+    }
+
+    /**
      * Gönderinin kendi Instagram hesabını bulur ve istemciyi strictly
      * o hesabın jetonuyla kurar. Hesap/jeton yoksa açık hata fırlatır.
      */
@@ -115,6 +140,8 @@ class PublishInstagramPostService
             'is_ai_generated' => $post->is_ai_generated ?: null,
             'alt_text' => $post->alt_text !== null ? ['text' => $post->alt_text] : null,
             'media_type' => $post->media_type,
+            // Domain 2: Story → Link Sticker
+            'story_link' => $post->isStory() ? $post->story_link : null,
             $post->isVideo() ? 'video_url' : 'image_url' => $post->media_url,
         ], fn ($value) => $value !== null));
 

@@ -25,7 +25,10 @@ class InstagramPostFactory extends Factory
             'media_type' => InstagramPost::MEDIA_TYPE_IMAGE,
             'caption' => fake()->sentence(),
             'media_url' => 'https://example.com/images/'.Str::random(8).'.jpg',
+            'story_link' => null,
+            'first_comment' => null,
             'is_ai_generated' => false,
+            'product_id' => null,
             'status' => InstagramPost::STATUS_DRAFT,
         ];
     }

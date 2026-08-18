@@ -35,9 +35,12 @@ class InstagramPost extends Model
         'media_type',
         'caption',
         'media_url',
+        'story_link',
+        'first_comment',
         'children',
         'alt_text',
         'is_ai_generated',
+        'product_id',
         'container_id',
         'media_id',
         'status',
@@ -151,5 +154,21 @@ class InstagramPost extends Model
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * Domain 1 ↔ Domain 2: Bu gönderinin bağladığı Link Vault ürünü.
+     */
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    /**
+     * Story gönderileri için story_link alanı dolu mu?
+     */
+    public function isStory(): bool
+    {
+        return $this->media_type === self::MEDIA_TYPE_STORIES;
     }
 }

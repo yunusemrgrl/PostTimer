@@ -153,6 +153,21 @@ class InstagramPublishingService
     }
 
     /**
+     * Domain 2: Yayınlanmış bir medyaya yorum atar (otomatik ilk yorum).
+     *
+     * @return array<string, mixed>
+     */
+    public function createComment(string $mediaId, string $message): array
+    {
+        $response = $this->http()->post("https://{$this->host}/{$this->apiVersion}/{$mediaId}/comments", [
+            'message' => $message,
+            'access_token' => $this->token,
+        ]);
+
+        return $response->throw()->json();
+    }
+
+    /**
      * Hesap profil bilgilerini getirir.
      *
      * @param  array<int, string>  $fields

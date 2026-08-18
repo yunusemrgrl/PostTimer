@@ -70,6 +70,27 @@ class InstagramPostForm
                             ->maxLength(2200)
                             ->columnSpanFull(),
 
+                        // Domain 2: Story → Link Sticker
+                        TextInput::make('story_link')
+                            ->label('Link Sticker URL')
+                            ->url()
+                            ->visible(fn (Get $get): bool => $get('media_type') === InstagramPost::MEDIA_TYPE_STORIES)
+                            ->helperText('Hikaye üzerinde tıklanabilir link sticker olarak görünür.')
+                            ->columnSpanFull(),
+
+                        // Domain 2: Reels/Post/Karusel → Otomatik İlk Yorum
+                        Textarea::make('first_comment')
+                            ->label('Otomatik İlk Yorum')
+                            ->maxLength(2200)
+                            ->visible(fn (Get $get): bool => in_array($get('media_type'), [
+                                InstagramPost::MEDIA_TYPE_IMAGE,
+                                InstagramPost::MEDIA_TYPE_VIDEO,
+                                InstagramPost::MEDIA_TYPE_REELS,
+                                InstagramPost::MEDIA_TYPE_CAROUSEL,
+                            ], true))
+                            ->helperText('Yayınlandıktan sonra otomatik olarak bu yorum atanır (affiliate link için ideal).')
+                            ->columnSpanFull(),
+
                         TextInput::make('alt_text')
                             ->label('Alt Metin')
                             ->maxLength(1000)
@@ -86,6 +107,24 @@ class InstagramPostForm
                             ->helperText('Boş bırakırsanız gönderi "Yayınla" ile anında yayınlanır. Gelecek bir tarih seçerseniz gönderi o tarihte otomatik yayınlanır.')
                             ->minDate(now())
                             ->seconds(false)
+                            ->columnSpanFull(),
+                    ]),
+
+                // Domain 1 ↔ Domain 2: Link Vault ürün seçimi
+                Section::make('Link Vault')
+                    ->description('Bu gönderiyi Link Vault\'taki bir ürüne bağlayın.')
+                    ->schema([
+                        Select::make('product_id')
+                            ->label('Ürün')
+                            ->options(function (): array {
+                                return Filament::getTenant()
+                                    ?->products()
+                                    ->pluck('title', 'id')
+                                    ->all() ?? [];
+                            })
+                            ->searchable()
+                            ->preload()
+                            ->helperText('Ürün seçerseniz, gönderi yayından sonra stok kontrolüne (Domain 3) dahil edilir.')
                             ->columnSpanFull(),
                     ]),
             ]);

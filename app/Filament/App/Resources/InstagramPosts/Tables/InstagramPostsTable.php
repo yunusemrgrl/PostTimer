@@ -34,6 +34,12 @@ class InstagramPostsTable
                     ->searchable()
                     ->placeholder('—'),
 
+                TextColumn::make('product.title')
+                    ->label('Ürün')
+                    ->limit(30)
+                    ->placeholder('—')
+                    ->toggleable(),
+
                 TextColumn::make('status')
                     ->label('Durum')
                     ->formatStateUsing(fn (string $state) => InstagramPost::statuses()[$state] ?? $state)
