@@ -55,8 +55,6 @@
                     :item="$item"
                     :src="$item->thumbnailUrl"
                     :lazy="true"
-                    :player="curator()->isVideo($item->ext)"
-                    :controls="curator()->isVideo($item->ext)"
                     icon-classes="size-6"
                     :width="$width"
                     :height="$height"

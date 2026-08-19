@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\Media;
 use App\Observers\MediaObserver;
 use Awcodes\Curator\Facades\Glide;
+use Awcodes\Curator\Glide\SymfonyResponseFactory;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\ServiceProvider;
@@ -15,7 +16,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         Glide::serverConfig([
-            'response' => new \Awcodes\Curator\Glide\SymfonyResponseFactory(
+            'response' => new SymfonyResponseFactory(
                 app('request')
             ),
             'source' => Storage::disk('r2')->getDriver(),

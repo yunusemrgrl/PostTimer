@@ -6,10 +6,9 @@ namespace App\Models;
 
 use Awcodes\Curator\Facades\Curator;
 use Database\Factories\MediaFactory;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Casts\Attribute;
-use Illuminate\Support\Facades\Storage;
 
 class Media extends \Awcodes\Curator\Models\Media
 {

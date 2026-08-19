@@ -3,8 +3,8 @@
 namespace App\Observers;
 
 use App\Models\Media;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Symfony\Component\Process\Process;
 
 class MediaObserver
@@ -37,8 +37,8 @@ class MediaObserver
         $disk = Storage::disk($media->disk);
 
         // Geçici dosyalar.
-        $tempVideo = tempnam(sys_get_temp_dir(), 'curator-video-') . '.mp4';
-        $tempThumbnail = tempnam(sys_get_temp_dir(), 'curator-thumb-') . '.jpg';
+        $tempVideo = tempnam(sys_get_temp_dir(), 'curator-video-').'.mp4';
+        $tempThumbnail = tempnam(sys_get_temp_dir(), 'curator-thumb-').'.jpg';
 
         try {
             /*
@@ -92,7 +92,7 @@ class MediaObserver
 
             if (! $process->isSuccessful() || ! file_exists($tempThumbnail)) {
                 throw new \RuntimeException(
-                    'FFmpeg thumbnail oluşturamadı: ' . $process->getErrorOutput()
+                    'FFmpeg thumbnail oluşturamadı: '.$process->getErrorOutput()
                 );
             }
 
@@ -100,9 +100,9 @@ class MediaObserver
              * Thumbnail'ı videonun yanında R2'ye koyuyoruz.
              */
             $thumbnailPath = $media->directory
-                . '/'
-                . $media->name
-                . '-thumbnail.jpg';
+                .'/'
+                .$media->name
+                .'-thumbnail.jpg';
 
             $thumbnailStream = fopen($tempThumbnail, 'rb');
 

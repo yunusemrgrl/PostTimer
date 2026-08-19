@@ -1,8 +1,8 @@
 <?php
 
 use App\Http\Controllers\InstagramConnectController;
-use App\Http\Controllers\TelegramWebhookController;
 use App\Http\Controllers\MediaThumbnailController;
+use App\Http\Controllers\TelegramWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
