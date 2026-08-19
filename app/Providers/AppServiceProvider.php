@@ -2,7 +2,11 @@
 
 namespace App\Providers;
 
+use App\Models\Media;
+use App\Observers\MediaObserver;
+use Awcodes\Curator\Facades\Glide;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\ServiceProvider;
 use RuntimeException;
 
@@ -10,7 +14,17 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        Glide::serverConfig([
+            'response' => new \Awcodes\Curator\Glide\SymfonyResponseFactory(
+                app('request')
+            ),
+            'source' => Storage::disk('r2')->getDriver(),
+            'source_path_prefix' => '',
+            'cache' => Storage::disk('local')->getDriver(),
+            'cache_path_prefix' => '.cache',
+            'max_image_size' => 2000 * 2000,
+            'base_url' => 'curator',
+        ]);
     }
 
     public function boot(): void
@@ -33,5 +47,7 @@ class AppServiceProvider extends ServiceProvider
         if (! app()->environment(['local', 'testing']) && blank(config('app.media_tenant_hash_key'))) {
             throw new RuntimeException('MEDIA_TENANT_HASH_KEY tanımlı değil — uygulama başlatılamıyor.');
         }
+
+        Media::observe(MediaObserver::class);
     }
 }

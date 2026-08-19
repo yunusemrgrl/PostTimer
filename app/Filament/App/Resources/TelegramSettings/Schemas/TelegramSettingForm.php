@@ -2,9 +2,9 @@
 
 namespace App\Filament\App\Resources\TelegramSettings\Schemas;
 
-use Filament\Forms\Components\Actions\Action;
-use Filament\Forms\Components\Placeholder;
+use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
@@ -28,9 +28,9 @@ class TelegramSettingForm
                             ->helperText('@BotFather → /newbot → alınan token')
                             ->columnSpanFull(),
 
-                        Placeholder::make('verification_status')
+                        TextEntry::make('verification_status')
                             ->label('Doğrulama Durumu')
-                            ->content(function (Get $get): string {
+                            ->state(function (Get $get): string {
                                 $chatId = $get('chat_id');
                                 $verified = $get('is_verified');
 

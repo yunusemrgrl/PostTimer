@@ -2,123 +2,134 @@
 
 declare(strict_types=1);
 
-namespace Tests\Feature\Curator;
-
+use App\Filament\Curator\TenantPathGenerator;
 use App\Models\Media;
 use App\Models\Team;
+use App\Models\TeamMember;
+use App\Models\User;
+use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
-use Tests\TestCase;
 
-class TenantMediaTest extends TestCase
+use function Pest\Laravel\assertDatabaseHas;
+use function Pest\Laravel\assertDatabaseMissing;
+
+uses(RefreshDatabase::class);
+
+beforeEach(function () {
+    config(['app.media_tenant_hash_key' => 'test-secret-key']);
+    Storage::fake('public');
+
+    $this->user = User::factory()->create();
+
+    $this->team = Team::factory()
+        ->hasAttached($this->user, ['role' => TeamMember::ROLE_OWNER], 'users')
+        ->create();
+
+    $this->actingAs($this->user);
+});
+
+/**
+ * Test verisi (factory) her zaman panel boot edilmeden ÖNCE oluşturulmalı;
+ * Filament'in `creating` dinleyicisi kayıtları aktif tenant'a yeniden
+ * ilişkilendirir. (bkz. .ai/rules/tests.md)
+ */
+function bootCuratorTenantPanel(Team $team): void
 {
-    use RefreshDatabase;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        config([
-            'app.media_tenant_hash_key' => 'test-secret-key',
-        ]);
-
-        Storage::fake('public');
-    }
-
-    public function test_media_path_is_isolated_between_tenants(): void
-    {
-        $teamA = Team::factory()->create();
-        $teamB = Team::factory()->create();
-
-        $hashA = hash_hmac(
-            'sha256',
-            (string) $teamA->getKey(),
-            'test-secret-key',
-        );
-
-        $hashB = hash_hmac(
-            'sha256',
-            (string) $teamB->getKey(),
-            'test-secret-key',
-        );
-
-        $this->assertNotSame($hashA, $hashB);
-
-        $pathA = "tenants/{$hashA}/media/2026/08";
-        $pathB = "tenants/{$hashB}/media/2026/08";
-
-        Storage::disk('public')->put(
-            "{$pathA}/file-a.png",
-            'tenant-a-file',
-        );
-
-        Storage::disk('public')->put(
-            "{$pathB}/file-b.png",
-            'tenant-b-file',
-        );
-
-        Storage::disk('public')->assertExists("{$pathA}/file-a.png");
-        Storage::disk('public')->assertExists("{$pathB}/file-b.png");
-
-        Storage::disk('public')->assertMissing("{$pathA}/file-b.png");
-        Storage::disk('public')->assertMissing("{$pathB}/file-a.png");
-    }
-
-    public function test_media_belongs_to_the_correct_team(): void
-    {
-        $teamA = Team::factory()->create();
-        $teamB = Team::factory()->create();
-
-        $mediaA = Media::factory()->create([
-            'team_id' => $teamA->getKey(),
-        ]);
-
-        $mediaB = Media::factory()->create([
-            'team_id' => $teamB->getKey(),
-        ]);
-
-        $this->assertTrue($mediaA->team->is($teamA));
-        $this->assertTrue($mediaB->team->is($teamB));
-
-        $this->assertFalse($mediaA->team->is($teamB));
-        $this->assertFalse($mediaB->team->is($teamA));
-    }
-
-    public function test_media_query_includes_curator_required_columns(): void
-    {
-        $team = Team::factory()->create();
-
-        Media::factory()->create([
-            'team_id' => $team->getKey(),
-        ]);
-
-        $media = Media::query()
-            ->select('id', 'name', 'disk', 'path', 'team_id')
-            ->latest()
-            ->first();
-
-        $this->assertNotNull($media);
-        $this->assertSame($team->getKey(), $media->team_id);
-        $this->assertNotEmpty($media->disk);
-        $this->assertNotEmpty($media->path);
-        $this->assertNotEmpty($media->url);
-    }
-
-    public function test_tenant_path_generator_generates_the_expected_path(): void
-    {
-        $team = Team::factory()->create();
-
-        $hash = hash_hmac(
-            'sha256',
-            (string) $team->getKey(),
-            'test-secret-key',
-        );
-
-        $expected = "tenants/{$hash}/media/2026/08";
-
-        $this->assertStringStartsWith(
-            "tenants/{$hash}/media/",
-            $expected,
-        );
-    }
+    Filament::setCurrentPanel('app');
+    Filament::setTenant($team);
+    Filament::bootCurrentPanel();
 }
+
+it('generates a tenant-scoped path via the curator path generator', function () {
+    bootCuratorTenantPanel($this->team);
+
+    $hash = hash_hmac('sha256', (string) $this->team->getKey(), 'test-secret-key');
+    $path = app(TenantPathGenerator::class)->getPath();
+
+    expect($path)
+        ->toStartWith("tenants/{$hash}/media/")
+        ->toMatch('/^tenants\/[0-9a-f]{64}\/media\/\d{4}\/\d{2}$/');
+});
+
+it('isolates media paths between tenants through the path generator', function () {
+    $teamA = $this->team;
+    $teamB = Team::factory()
+        ->hasAttached($this->user, ['role' => TeamMember::ROLE_OWNER], 'users')
+        ->create();
+
+    bootCuratorTenantPanel($teamA);
+    $pathA = app(TenantPathGenerator::class)->getPath();
+
+    Filament::setTenant($teamB);
+    $pathB = app(TenantPathGenerator::class)->getPath();
+
+    $hashA = hash_hmac('sha256', (string) $teamA->getKey(), 'test-secret-key');
+    $hashB = hash_hmac('sha256', (string) $teamB->getKey(), 'test-secret-key');
+
+    expect($pathA)
+        ->toStartWith("tenants/{$hashA}/media/")
+        ->and($pathB)->toStartWith("tenants/{$hashB}/media/")
+        ->and($pathA)->not->toBe($pathB);
+});
+
+it('throws when the path generator has no active tenant', function () {
+    expect(fn () => app(TenantPathGenerator::class)->getPath())
+        ->toThrow(RuntimeException::class, 'active tenant');
+});
+
+it('throws when the media tenant hash key is not configured', function () {
+    bootCuratorTenantPanel($this->team);
+    config(['app.media_tenant_hash_key' => null]);
+
+    expect(fn () => app(TenantPathGenerator::class)->getPath())
+        ->toThrow(RuntimeException::class, 'MEDIA_TENANT_HASH_KEY');
+});
+
+it('associates media with the correct team', function () {
+    $otherTeam = Team::factory()->create();
+
+    $ownMedia = Media::factory()->for($this->team)->create();
+    $otherMedia = Media::factory()->for($otherTeam)->create();
+
+    expect($ownMedia->team->is($this->team))->toBeTrue()
+        ->and($otherMedia->team->is($otherTeam))->toBeTrue()
+        ->and($ownMedia->team->is($otherTeam))->toBeFalse();
+
+    assertDatabaseHas('curator', ['id' => $ownMedia->id, 'team_id' => $this->team->id]);
+    assertDatabaseHas('curator', ['id' => $otherMedia->id, 'team_id' => $otherTeam->id]);
+});
+
+it('cascades media deletion when a team is removed', function () {
+    $team = Team::factory()->create();
+    $media = Media::factory()->for($team)->create();
+
+    $team->delete();
+
+    assertDatabaseMissing('curator', ['id' => $media->id]);
+});
+
+it('exposes the url accessor and required columns on a stored media record', function () {
+    $team = Team::factory()->create();
+    $path = 'tenants/'.hash_hmac('sha256', (string) $team->getKey(), 'test-secret-key').'/media/2026/08/file.png';
+
+    Storage::disk('public')->put($path, 'contents');
+
+    $media = Media::factory()->for($team)->create([
+        'disk' => 'public',
+        'path' => $path,
+        'name' => 'file',
+        'ext' => 'png',
+    ]);
+
+    $queried = Media::query()
+        ->select('id', 'name', 'disk', 'path', 'team_id')
+        ->latest()
+        ->first();
+
+    expect($queried)->not->toBeNull()
+        ->and($queried->team_id)->toBe($team->id)
+        ->and($queried->disk)->toBe('public')
+        ->and($queried->path)->toBe($path)
+        ->and($queried->url)->toBe(Storage::disk('public')->url($path));
+});
