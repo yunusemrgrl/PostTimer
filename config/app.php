@@ -84,6 +84,8 @@ return [
 
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
 
+    'media_tenant_hash_key' => env('MEDIA_TENANT_HASH_KEY'),
+
     /*
     |--------------------------------------------------------------------------
     | Encryption Key

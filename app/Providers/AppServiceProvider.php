@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -26,5 +27,11 @@ class AppServiceProvider extends ServiceProvider
         Gate::before(function ($user) {
             return $user->isSuperAdmin() ? true : null;
         });
+
+        // Sadece 'production' değil; local/testing DIŞINDAKİ her ortamda
+        // (staging, qa, preview, vs.) config eksikliğini erken yakalıyoruz.
+        if (! app()->environment(['local', 'testing']) && blank(config('app.media_tenant_hash_key'))) {
+            throw new RuntimeException('MEDIA_TENANT_HASH_KEY tanımlı değil — uygulama başlatılamıyor.');
+        }
     }
 }

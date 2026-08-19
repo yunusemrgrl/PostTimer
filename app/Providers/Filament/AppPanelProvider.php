@@ -4,6 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\App\Resources\Members\MemberResource;
 use App\Models\Team;
+use Awcodes\Curator\CuratorPlugin;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -64,6 +65,9 @@ class AppPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
+            ])
+            ->plugins([
+                CuratorPlugin::make(),
             ]);
     }
 }
