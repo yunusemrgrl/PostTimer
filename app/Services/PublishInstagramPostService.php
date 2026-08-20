@@ -86,6 +86,24 @@ class PublishInstagramPostService
 
             $log->log('publish.limit.ok');
 
+            // Gözlem: Instagram'a gönderilecek GERÇEK medya URL(leri).
+            // "Invalid media url" hatalarında hangi URL'nin iletildiğini
+            // görmek için container oluşturulmadan ÖNCE loglanır.
+            $childUrls = $post->media_type === InstagramPost::MEDIA_TYPE_CAROUSEL
+                ? collect($post->children ?? [])
+                    ->filter()
+                    ->map(fn (mixed $child): string => $this->childUrl($child))
+                    ->values()
+                    ->all()
+                : [];
+
+            $log->log('publish.media.url', [
+                'media_url' => $post->media_url,
+                'child_urls' => $childUrls,
+            ]);
+
+            $this->warnIfMediaUrlNotPublic($log, $post->media_url, $childUrls);
+
             // Pattern 3: Container Resume — container zaten varsa yeniden oluşturma
             $containerResumed = $post->container_id !== null;
             $containerId = $post->container_id ?: $this->createContainer($post, $instagram);
@@ -199,6 +217,58 @@ class PublishInstagramPostService
     protected function isRetryable(Throwable $exception): bool
     {
         return $exception instanceof RequestException;
+    }
+
+    /**
+     * Instagram Graph API, medyanın public HTTPS bir URL'den erişilebilir
+     * olmasını bekler. Şu URL'ler yayında "Invalid media url" hatasına yol
+     * açar ve uyarı olarak loglanır:
+     * - http şeması veya host içermeyen URL'ler
+     * - local/test hostları (localhost, *.test, *.localhost)
+     * - R2/S3 API endpoint hostları (*.r2.cloudflarestorage.com,
+     *   *.amazonaws.com) — bunlar public içerik host'u değildir; public
+     *   bucket/CDN alan adı (disk config'indeki `url` / R2_URL) gerekir.
+     * YALNIZCA gözlemdir, publish davranışını değiştirmez.
+     *
+     * @param  array<int, string>  $childUrls
+     */
+    protected function warnIfMediaUrlNotPublic(PublishFlowLogger $log, ?string $mediaUrl, array $childUrls): void
+    {
+        $urls = array_values(array_filter(
+            [$mediaUrl, ...$childUrls],
+            fn (?string $url): bool => is_string($url) && $url !== '',
+        ));
+
+        foreach ($urls as $url) {
+            $scheme = parse_url($url, PHP_URL_SCHEME);
+            $host = parse_url($url, PHP_URL_HOST);
+            $lowerHost = is_string($host) ? strtolower($host) : '';
+
+            $isLocalHost = $lowerHost !== '' && (
+                in_array($lowerHost, ['localhost', '127.0.0.1', '0.0.0.0'], true)
+                || str_ends_with($lowerHost, '.test')
+                || str_ends_with($lowerHost, '.localhost')
+            );
+
+            $isStorageApiHost = $lowerHost !== '' && (
+                str_ends_with($lowerHost, '.r2.cloudflarestorage.com')
+                || str_ends_with($lowerHost, '.amazonaws.com')
+            );
+
+            if ($scheme !== 'https' || $lowerHost === '' || $isLocalHost || $isStorageApiHost) {
+                $log->warn('publish.media.url.not_public', [
+                    'media_url' => $url,
+                    'url_scheme' => $scheme,
+                    'url_host' => $host,
+                    'reason' => match (true) {
+                        $scheme !== 'https' => 'not_https',
+                        $lowerHost === '' => 'missing_host',
+                        $isLocalHost => 'local_host',
+                        default => 'storage_api_host',
+                    },
+                ]);
+            }
+        }
     }
 
     /**

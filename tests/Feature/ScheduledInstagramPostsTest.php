@@ -6,6 +6,7 @@ use App\Filament\App\Resources\InstagramPosts\Pages\ListInstagramPosts;
 use App\Jobs\PublishScheduledPost;
 use App\Models\InstagramAccount;
 use App\Models\InstagramPost;
+use App\Models\Media;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 
 use function Pest\Laravel\assertDatabaseHas;
@@ -56,15 +58,22 @@ function connectInstagramAccount(Team $team, string $igUserId = '90010177253934'
 it('schedules a post when a future date is chosen in the form', function () {
     connectInstagramAccount($this->team, '90010177253934');
 
+    $media = Media::factory()->for($this->team)->create([
+        'disk' => 'public',
+        'path' => 'tenants/test/media/2026/08/scheduled.jpg',
+        'ext' => 'jpg',
+        'type' => 'image/jpeg',
+    ]);
+
     bootTenantPanelFor($this->team);
 
     Livewire::test(CreateInstagramPost::class)
         ->fillForm([
             'ig_user_id' => '90010177253934',
             'media_type' => 'IMAGE',
-            'media_url' => 'https://example.com/images/bronz-fonz.jpg',
             'scheduled_at' => now()->addDay()->format('Y-m-d H:i:s'),
         ])
+        ->set('data.media_url', [(string) Str::uuid() => $media->toArray()])
         ->call('create')
         ->assertHasNoFormErrors();
 
@@ -72,7 +81,8 @@ it('schedules a post when a future date is chosen in the form', function () {
 
     expect($post)
         ->status->toBe(InstagramPost::STATUS_SCHEDULED)
-        ->scheduled_at->not->toBeNull();
+        ->scheduled_at->not->toBeNull()
+        ->media_url->toBe(Media::resolveUrl($media->disk, $media->path));
 
     Http::assertNothingSent();
 });
@@ -80,14 +90,21 @@ it('schedules a post when a future date is chosen in the form', function () {
 it('keeps a post as draft when no date is chosen', function () {
     connectInstagramAccount($this->team, '90010177253934');
 
+    $media = Media::factory()->for($this->team)->create([
+        'disk' => 'public',
+        'path' => 'tenants/test/media/2026/08/draft.jpg',
+        'ext' => 'jpg',
+        'type' => 'image/jpeg',
+    ]);
+
     bootTenantPanelFor($this->team);
 
     Livewire::test(CreateInstagramPost::class)
         ->fillForm([
             'ig_user_id' => '90010177253934',
             'media_type' => 'IMAGE',
-            'media_url' => 'https://example.com/images/bronz-fonz.jpg',
         ])
+        ->set('data.media_url', [(string) Str::uuid() => $media->toArray()])
         ->call('create')
         ->assertHasNoFormErrors();
 

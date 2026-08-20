@@ -24,6 +24,8 @@ class EditInstagramPost extends EditRecord
      */
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        $data = InstagramPost::resolveCarouselMedia($data);
+
         return InstagramPost::resolveScheduling($data);
     }
 }

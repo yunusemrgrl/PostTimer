@@ -16,6 +16,8 @@ class CreateInstagramPost extends CreateRecord
      */
     protected function mutateFormDataBeforeCreate(array $data): array
     {
+        $data = InstagramPost::resolveCarouselMedia($data);
+
         return InstagramPost::resolveScheduling($data);
     }
 }

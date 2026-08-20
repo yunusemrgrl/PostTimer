@@ -27,6 +27,51 @@ class Media extends \Awcodes\Curator\Models\Media
         return MediaFactory::new();
     }
 
+    /**
+     * Herkese açık bir medya URL'sinden ilgili Media kaydını bulur.
+     *
+     * Curator disk URL'leri `{disk_url}/{path}` formatındadır ancak önek
+     * diske göre değişir:
+     * - `public` disk: `{APP_URL}/storage/{path}`
+     * - R2/S3 (virtual-host veya custom domain): `https://{host}/{path}`
+     * - R2/S3 (path-style endpoint): `https://{endpoint}/{bucket}/{path}`
+     *
+     * Bu yüzden URL'nin path bölümünden baştan segment kırparak üretilen
+     * tüm suffix adayları indexli `path` kolonu üzerinden aranır ve en
+     * uzun (en spesifik) eşleşme döndürülür. Form hydrate edilirken
+     * Curator seçimini geri yüklemek için kullanılır.
+     */
+    public static function findByPublicUrl(string $url): ?self
+    {
+        $urlPath = parse_url($url, PHP_URL_PATH);
+
+        if (! is_string($urlPath) || $urlPath === '') {
+            return null;
+        }
+
+        $candidates = [];
+        $segment = ltrim($urlPath, '/');
+
+        // En fazla 3 önek segment kırılır (storage/, bucket/, vb.).
+        for ($depth = 0; $depth <= 3 && $segment !== ''; $depth++) {
+            $candidates[] = $segment;
+
+            $nextSlash = strpos($segment, '/');
+
+            if ($nextSlash === false) {
+                break;
+            }
+
+            $segment = substr($segment, $nextSlash + 1);
+        }
+
+        return static::query()
+            ->whereIn('path', $candidates)
+            ->get()
+            ->sortByDesc(fn (self $media): int => strlen($media->path))
+            ->first();
+    }
+
     public function thumbnailUrl(): Attribute
     {
         return Attribute::make(

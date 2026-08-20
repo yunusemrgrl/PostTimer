@@ -186,6 +186,25 @@ class InstagramPost extends Model
         return $data;
     }
 
+    /**
+     * Formdaki geçici `carousel_media` CuratorPicker alanını mevcut `children`
+     * JSON kolonuna taşır. Her çocuğun public URL'si form katmanında çözülür;
+     * burada yalnızca alan eşlemesi yapılır.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function resolveCarouselMedia(array $data): array
+    {
+        if (array_key_exists('carousel_media', $data)) {
+            $data['children'] = $data['carousel_media'] ?? [];
+
+            unset($data['carousel_media']);
+        }
+
+        return $data;
+    }
+
     public function isVideo(): bool
     {
         return in_array($this->media_type, [self::MEDIA_TYPE_VIDEO, self::MEDIA_TYPE_REELS], true);

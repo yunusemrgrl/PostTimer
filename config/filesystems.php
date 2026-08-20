@@ -67,6 +67,11 @@ return [
             'region' => env('R2_DEFAULT_REGION', 'auto'),
             'bucket' => env('R2_BUCKET'),
             'endpoint' => env('R2_ENDPOINT'),
+            // Public bucket/CDN alan adı (örn. https://pub-xxx.r2.dev).
+            // Dolu olursa Storage::url() bu tabandan public URL üretir;
+            // boşsa endpoint/bucket'tan türetilir (Instagram'ın
+            // erişemeyeceği bir API host'u olabilir).
+            'url' => env('R2_URL'),
             'use_path_style_endpoint' => env('R2_USE_PATH_STYLE_ENDPOINT', false),
             'visibility' => 'public',
             'throw' => true,

@@ -79,10 +79,13 @@ it('logs every publish flow stage with correlation context without changing beha
         ->toContain('publish.lock.acquired')
         ->toContain('publish.client.resolved')
         ->toContain('publish.limit.ok')
+        ->toContain('publish.media.url')
         ->toContain('publish.container.ready')
         ->toContain('publish.media.published')
         ->toContain('publish.persist')
-        ->toContain('event.post_published');
+        ->toContain('event.post_published')
+        // Instagram'a gönderilen gerçek medya URL'si logda görünür
+        ->toContain('example.com');
 
     // Korelasyon bağlamı: flow_id, post_id, team_id, ig_user_id
     expect($content)
@@ -164,6 +167,61 @@ it('logs the skip stage for an already published post', function () {
 
     Http::assertNothingSent();
     Event::assertDispatched(PostPublished::class);
+});
+
+it('warns when the media url is not publicly reachable', function () {
+    enablePublishFlowLog();
+
+    Http::fakeSequence()
+        ->push(['data' => [['quota_total' => 100, 'quota_used' => 10]]])
+        ->push(['id' => 'ig_container_1'])
+        ->push(['id' => 'ig_media_1']);
+
+    // http şeması + .test hostu: Instagram bunu asla erişemez
+    $post = InstagramPost::factory()->create([
+        'media_url' => 'http://posttimer.test/media/foto.jpg',
+    ]);
+
+    connectAccountForFlowLogs($post);
+
+    (new PublishInstagramPostService)->publish($post, 'flow-local');
+
+    $content = readPublishFlowLog();
+
+    expect($content)
+        ->toContain('publish.media.url')
+        ->toContain('publish.media.url.not_public')
+        ->toContain('"url_scheme":"http"')
+        ->toContain('"url_host":"posttimer.test"');
+
+    // Yalnızca gözlem: publish davranışı değişmez
+    expect($post->fresh())->status->toBe(InstagramPost::STATUS_PUBLISHED);
+});
+
+it('warns when the media url points at a storage api host instead of a public host', function () {
+    enablePublishFlowLog();
+
+    Http::fakeSequence()
+        ->push(['data' => [['quota_total' => 100, 'quota_used' => 10]]])
+        ->push(['id' => 'ig_container_1'])
+        ->push(['id' => 'ig_media_1']);
+
+    // R2 API endpoint host'u: Instagram buradan public içerik çekemez;
+    // disk config'indeki public url (R2_URL) kullanılmalıdır.
+    $post = InstagramPost::factory()->create([
+        'media_url' => 'https://bucket.1234567890.r2.cloudflarestorage.com/tenants/x/foto.jpg',
+    ]);
+
+    connectAccountForFlowLogs($post);
+
+    (new PublishInstagramPostService)->publish($post, 'flow-r2');
+
+    $content = readPublishFlowLog();
+
+    expect($content)
+        ->toContain('publish.media.url')
+        ->toContain('publish.media.url.not_public')
+        ->toContain('"reason":"storage_api_host"');
 });
 
 it('propagates the manual flow id from publishNow into the publish stages', function () {

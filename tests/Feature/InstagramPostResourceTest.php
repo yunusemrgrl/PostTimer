@@ -2,9 +2,11 @@
 
 use App\Events\PostPublished;
 use App\Filament\App\Resources\InstagramPosts\Pages\CreateInstagramPost;
+use App\Filament\App\Resources\InstagramPosts\Pages\EditInstagramPost;
 use App\Filament\App\Resources\InstagramPosts\Pages\ListInstagramPosts;
 use App\Models\InstagramAccount;
 use App\Models\InstagramPost;
+use App\Models\Media;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
@@ -13,6 +15,7 @@ use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 
 use function Pest\Laravel\assertDatabaseHas;
@@ -63,11 +66,28 @@ it('lists only the current tenants instagram posts', function () {
         ->not->toContain($otherPost->id);
 });
 
-it('associates newly created posts with the current tenant', function () {
+/**
+ * Curator kütüphanesinde takım için test medyası oluşturur.
+ */
+function createMediaFor(Team $team, string $name, string $type = 'image/jpeg', string $ext = 'jpg'): Media
+{
+    return Media::factory()->for($team)->create([
+        'disk' => 'public',
+        'directory' => 'tenants/test/media/2026/08',
+        'name' => $name,
+        'path' => "tenants/test/media/2026/08/{$name}.{$ext}",
+        'ext' => $ext,
+        'type' => $type,
+    ]);
+}
+
+it('associates newly created posts with the current tenant and fills media url from curator', function () {
     InstagramAccount::factory()
         ->for($this->team)
         ->withToken('account-token')
         ->create(['ig_user_id' => '90010177253934']);
+
+    $media = createMediaFor($this->team, 'bronz-fonz');
 
     bootTenantPanel($this->team);
 
@@ -75,9 +95,11 @@ it('associates newly created posts with the current tenant', function () {
         ->fillForm([
             'ig_user_id' => '90010177253934',
             'media_type' => 'IMAGE',
-            'media_url' => 'https://example.com/images/bronz-fonz.jpg',
             'caption' => 'Yeni içerik',
         ])
+        // CuratorPicker state'i: uuid => medya dizisi (modal seçim formatı).
+        // fillForm iç içe dizileri parçaladığı için picker state'i set() ile verilir.
+        ->set('data.media_url', [(string) Str::uuid() => $media->toArray()])
         ->call('create')
         ->assertHasNoFormErrors();
 
@@ -85,7 +107,68 @@ it('associates newly created posts with the current tenant', function () {
         'team_id' => $this->team->id,
         'ig_user_id' => '90010177253934',
         'status' => InstagramPost::STATUS_DRAFT,
+        // media_url, Curator medyasının public URL'si ile otomatik doldurulur
+        'media_url' => Media::resolveUrl($media->disk, $media->path),
     ]);
+});
+
+it('stores carousel children as public urls of the selected curator media', function () {
+    InstagramAccount::factory()
+        ->for($this->team)
+        ->withToken('account-token')
+        ->create(['ig_user_id' => '90010177253934']);
+
+    $first = createMediaFor($this->team, 'karusel-ilk');
+    $second = createMediaFor($this->team, 'karusel-ikinci');
+
+    bootTenantPanel($this->team);
+
+    Livewire::test(CreateInstagramPost::class)
+        ->fillForm([
+            'ig_user_id' => '90010177253934',
+            'media_type' => 'CAROUSEL',
+            'caption' => 'Karusel içerik',
+        ])
+        ->set('data.carousel_media', [
+            (string) Str::uuid() => $first->toArray(),
+            (string) Str::uuid() => $second->toArray(),
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    $post = InstagramPost::query()->latest('id')->first();
+
+    expect($post)
+        ->media_type->toBe(InstagramPost::MEDIA_TYPE_CAROUSEL)
+        ->children->toBe([
+            ['url' => Media::resolveUrl($first->disk, $first->path)],
+            ['url' => Media::resolveUrl($second->disk, $second->path)],
+        ]);
+});
+
+it('keeps the curator media url when editing an existing post', function () {
+    $media = createMediaFor($this->team, 'mevcut-medya');
+    $url = Media::resolveUrl($media->disk, $media->path);
+
+    $post = InstagramPost::factory()->for($this->team)->create([
+        'media_type' => InstagramPost::MEDIA_TYPE_IMAGE,
+        'media_url' => $url,
+        'status' => InstagramPost::STATUS_DRAFT,
+    ]);
+
+    InstagramAccount::factory()
+        ->for($this->team)
+        ->withToken('account-token')
+        ->create(['ig_user_id' => $post->ig_user_id]);
+
+    bootTenantPanel($this->team);
+
+    Livewire::test(EditInstagramPost::class, ['record' => $post->id])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    // Hydrate → dehydrate turunda public URL korunur
+    expect($post->fresh()->media_url)->toBe($url);
 });
 
 it('publishes a draft post through the table action', function () {
