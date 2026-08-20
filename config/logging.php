@@ -73,6 +73,13 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'publish' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/publish-flow.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'replace_placeholders' => true,
+        ],
+
         'monthly' => [
             'driver' => 'monthly',
             'path' => storage_path('logs/laravel.log'),

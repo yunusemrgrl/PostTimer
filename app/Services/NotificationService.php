@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Team;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**

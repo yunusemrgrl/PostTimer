@@ -54,6 +54,11 @@ class InstagramPublishingService
         return $this->token;
     }
 
+    public function getHost(): string
+    {
+        return $this->host;
+    }
+
     /**
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
@@ -136,14 +141,22 @@ class InstagramPublishingService
      *
      * @throws RuntimeException When the container errors, expires, or never finishes in time.
      */
-    public function waitForContainerToFinish(string $containerId): array
+    public function waitForContainerToFinish(string $containerId, ?callable $onPoll = null): array
     {
-        return retry($this->statusAttempts, function () use ($containerId): array {
-            $status = $this->getContainerStatus($containerId);
-            $statusCode = $status['status_code'] ?? 'unknown';
+        $attempt = 0;
+        $start = hrtime(true);
+
+        return retry($this->statusAttempts, function () use ($containerId, $onPoll, &$attempt, $start): array {
+            $attempt++;
+            $statusResponse = $this->getContainerStatus($containerId);
+            $statusCode = (string) ($statusResponse['status_code'] ?? 'unknown');
+
+            if ($onPoll) {
+                $onPoll($attempt, $statusCode, (int) round((hrtime(true) - $start) / 1e6));
+            }
 
             if (in_array($statusCode, ['FINISHED', 'PUBLISHED'], true)) {
-                return $status;
+                return $statusResponse;
             }
 
             throw new RuntimeException(

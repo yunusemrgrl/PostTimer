@@ -22,6 +22,7 @@ class NotifyPublishSuccessListener
             "✅ <b>Gönderi Yayınlandı</b>\n\n"
             ."Gönderi: <i>{$event->post->caption}</i>\n"
             ."Hesap: @{$event->post->team->instagramAccounts()->first()?->username}",
+            'post_published',
         );
     }
 }
