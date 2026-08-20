@@ -41,4 +41,22 @@ class Media extends \Awcodes\Curator\Models\Media
             },
         );
     }
+
+    public function mediumUrl(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): string => curator()->isVideo($this->ext)
+                ? route('media.video', ['media' => $this->name])
+                : Curator::getUrlProvider()::getMediumUrl($this->path),
+        );
+    }
+
+    public function largeUrl(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): string => curator()->isVideo($this->ext)
+                ? route('media.video', ['media' => $this->name])
+                : Curator::getUrlProvider()::getLargeUrl($this->path),
+        );
+    }
 }
