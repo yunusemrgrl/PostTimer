@@ -2,6 +2,7 @@
 
 use App\Events\PostPublished;
 use App\Events\PostPublishFailed;
+use App\Jobs\PublishScheduledPost;
 use App\Models\InstagramAccount;
 use App\Models\InstagramPost;
 use App\Services\PublishInstagramPostService;
@@ -9,8 +10,6 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
-
-use function Pest\Laravel\assertDatabaseHas;
 
 uses(RefreshDatabase::class);
 
@@ -105,7 +104,7 @@ it('resumes from existing container_id on retry (idempotency)', function () {
     });
 });
 
-it('marks the post as failed when instagram rejects the container', function () {
+it('leaves a failed publish retryable (publishing) without dispatching the failure event', function () {
     Http::fake([
         'https://graph.instagram.com/*content_publishing_limit*' => Http::response([
             'data' => [['quota_total' => 100, 'quota_used' => 10]],
@@ -122,12 +121,57 @@ it('marks the post as failed when instagram rejects the container', function () 
     expect(fn () => (new PublishInstagramPostService)->publish($post))
         ->toThrow(RequestException::class);
 
-    assertDatabaseHas('instagram_posts', [
-        'id' => $post->id,
-        'status' => InstagramPost::STATUS_FAILED,
-    ]);
+    // H1: geçici hata post'u 'publishing'de bırakır (retry yeniden claim edebilir)...
+    expect($post->fresh())
+        ->status->toBe(InstagramPost::STATUS_PUBLISHING)
+        ->error_message->not->toBeNull();
 
-    Event::assertDispatched(PostPublishFailed::class);
+    // ...ve henüz kalıcı olmadığı için PostPublishFailed FIRLATILMAZ.
+    Event::assertNotDispatched(PostPublishFailed::class);
+});
+
+it('re-publishes after a transient failure via retry reclaim', function () {
+    // Tek sıra: 1. deneme (limit + /media hatası) → 2. deneme (limit + container + publish)
+    Http::fakeSequence()
+        ->push(['data' => [['quota_total' => 100, 'quota_used' => 10]]])
+        ->push(['error' => ['message' => 'Temporary', 'type' => 'OAuthException']], 400)
+        ->push(['data' => [['quota_total' => 100, 'quota_used' => 10]]])
+        ->push(['id' => 'ig_container_1'])
+        ->push(['id' => 'ig_media_1'])
+        ->dontFailWhenEmpty();
+
+    $post = InstagramPost::factory()->create();
+    connectAccountFor($post);
+
+    // Deneme 1: geçici hata → post 'publishing'de kalır, FAILED/event olmaz
+    expect(fn () => (new PublishInstagramPostService)->publish($post))
+        ->toThrow(RequestException::class);
+
+    expect($post->fresh()->status)->toBe(InstagramPost::STATUS_PUBLISHING);
+
+    // Deneme 2: retry — aynı post 'publishing'den yeniden claim edilip başarılı olur
+    $result = (new PublishInstagramPostService)->publish($post->fresh());
+
+    expect($result)
+        ->status->toBe(InstagramPost::STATUS_PUBLISHED)
+        ->media_id->toBe('ig_media_1');
+
+    Event::assertDispatched(PostPublished::class);
+    Event::assertNotDispatched(PostPublishFailed::class);
+});
+
+it('marks the post failed and dispatches the event once when the job permanently fails', function () {
+    $post = InstagramPost::factory()->create();
+    connectAccountFor($post);
+
+    $job = new PublishScheduledPost($post);
+    $job->failed(new RuntimeException('Kalıcı hata'));
+
+    expect($post->fresh())
+        ->status->toBe(InstagramPost::STATUS_FAILED)
+        ->error_message->toBe('Kalıcı hata');
+
+    Event::assertDispatched(PostPublishFailed::class, 1);
 });
 
 it('refuses to publish when the account is out of quota', function () {
@@ -144,11 +188,12 @@ it('refuses to publish when the account is out of quota', function () {
     expect(fn () => (new PublishInstagramPostService)->publish($post))
         ->toThrow(RuntimeException::class);
 
+    // H1: servis status'u 'publishing' bırakır; kalıcı FAILED job'ın failed()'ında.
     expect($post->fresh())
-        ->status->toBe(InstagramPost::STATUS_FAILED)
+        ->status->toBe(InstagramPost::STATUS_PUBLISHING)
         ->error_message->toBe('Instagram 24 saatlik API yayın limiti doldu.');
 
-    Event::assertDispatched(PostPublishFailed::class);
+    Event::assertNotDispatched(PostPublishFailed::class);
 });
 
 it('refuses to publish when the post has no connected account', function () {
@@ -159,8 +204,9 @@ it('refuses to publish when the post has no connected account', function () {
     expect(fn () => (new PublishInstagramPostService)->publish($post))
         ->toThrow(RuntimeException::class);
 
-    expect($post->fresh())->status->toBe(InstagramPost::STATUS_FAILED);
+    expect($post->fresh())->status->toBe(InstagramPost::STATUS_PUBLISHING);
 
+    Event::assertNotDispatched(PostPublishFailed::class);
     Http::assertNothingSent();
 });
 
@@ -177,7 +223,8 @@ it('refuses to publish when the connected account has no token', function () {
     expect(fn () => (new PublishInstagramPostService)->publish($post))
         ->toThrow(RuntimeException::class);
 
-    expect($post->fresh())->status->toBe(InstagramPost::STATUS_FAILED);
+    expect($post->fresh())->status->toBe(InstagramPost::STATUS_PUBLISHING);
 
+    Event::assertNotDispatched(PostPublishFailed::class);
     Http::assertNothingSent();
 });

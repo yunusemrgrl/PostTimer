@@ -53,10 +53,23 @@ class PublishScheduledPost implements ShouldBeUnique, ShouldQueue
     }
 
     /**
-     * Tüm retry'lar tükendiğinde çağrılır — Telegram uyarısı tetiklenir.
+     * Tüm retry'lar tükendiğinde çağrılır (gerçek kalıcı hata).
+     *
+     * H1: PostFublishFailed event'i yalnızca burada fırlatılır — servis katmanı
+     * geçici hatalarda event fırlatmaz. Böylece aynı hata için tek event gönderilir
+     * ve post, retry'lar tükenene kadar 'publishing' / 'failed' olarak izlenebilir.
      */
     public function failed(Throwable $exception): void
     {
+        // Post muhtemelen hâlâ yayınlanmamışsa kalıcı FAILED durumuna geçir.
+        // (media_id varsa zaten başarıyla yayınlanmış demektir; üzerine yazma.)
+        if ($this->post->exists && ! $this->post->media_id) {
+            $this->post->forceFill([
+                'status' => InstagramPost::STATUS_FAILED,
+                'error_message' => $exception->getMessage(),
+            ])->save();
+        }
+
         PostPublishFailed::dispatch($this->post->fresh(), $exception->getMessage());
     }
 }

@@ -77,12 +77,14 @@ class PublishInstagramPostService
 
             return $post->fresh();
         } catch (Throwable $exception) {
+            // H1: Geçici hata — status'u 'publishing' bırakırız; yalnızca hatayı
+            // kaydederiz. Queue retry'ı atomicClaim(publishing) ile aynı postu
+            // yeniden alıp tekrar deneyebilir. Kalıcı FAILED + PostPublishFailed
+            // event'i, retry'lar tükenince job'ın failed() metodunda fırlatılır
+            // (çift event'i ve "retry çalışmıyor" sorununu önler).
             $post->forceFill([
-                'status' => InstagramPost::STATUS_FAILED,
                 'error_message' => $exception->getMessage(),
             ])->save();
-
-            PostPublishFailed::dispatch($post->fresh(), $exception->getMessage());
 
             throw $exception;
         } finally {
@@ -92,12 +94,27 @@ class PublishInstagramPostService
 
     /**
      * Zamanlanmış bir gönderiyi planı iptal edip hemen yayınlar.
+     *
+     * Manuel (senkron) yayın path'idir; kuyruk retry'ı olmadığından ilk
+     * hatada post kalıcı olarak FAILED durumuna alınır ve PostPublishFailed
+     * event'i fırlatılır (mevcut davranış korunur).
      */
     public function publishNow(InstagramPost $post): InstagramPost
     {
         $post->forceFill(['scheduled_at' => null])->save();
 
-        return $this->publish($post);
+        try {
+            return $this->publish($post);
+        } catch (Throwable $exception) {
+            $post->forceFill([
+                'status' => InstagramPost::STATUS_FAILED,
+                'error_message' => $exception->getMessage(),
+            ])->save();
+
+            PostPublishFailed::dispatch($post->fresh(), $exception->getMessage());
+
+            throw $exception;
+        }
     }
 
     /**

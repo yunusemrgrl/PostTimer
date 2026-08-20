@@ -135,14 +135,30 @@ class InstagramPost extends Model
      * Postu verilen kaynak durumdan "publishing" durumuna atomik geçirir.
      * Başka bir worker aynı postu almaya çalışırsa 0 döner → çift yayın engellenir.
      *
+     * NOT: `fromStatuses` varsayılanına `publishing` de dahildir; böylece H1
+     * retry akışında geçici bir hatadan sonra status'u `publishing`'de kalan
+     * post, queue retry'ı tarafından yeniden claim edilip tekrar denenebilir.
+     * Eşzamanlı çift yayını asıl engelleyen `Cache::lock`'tur; bu metot yalnızca
+     * "hâlâ yayınlanmamış" tazeliğini doğrular.
+     *
+     * Aynı değere geçiş (publishing→publishing) `affected rows`'un 0 dönmesine
+     * sebep olduğundan, güvenilir claim için `updated_at` da güncellenir.
+     *
      * @param  array<int, string>  $fromStatuses
      */
-    public function atomicClaim(array $fromStatuses = [self::STATUS_SCHEDULED, self::STATUS_DRAFT]): bool
+    public function atomicClaim(array $fromStatuses = [
+        self::STATUS_SCHEDULED,
+        self::STATUS_DRAFT,
+        self::STATUS_PUBLISHING,
+    ]): bool
     {
         return (bool) static::query()
             ->where('id', $this->id)
             ->whereIn('status', $fromStatuses)
-            ->update(['status' => self::STATUS_PUBLISHING]) > 0;
+            ->update([
+                'status' => self::STATUS_PUBLISHING,
+                'updated_at' => now(),
+            ]) > 0;
     }
 
     /**
