@@ -172,7 +172,7 @@ class InstagramPostForm
                         DateTimePicker::make('scheduled_at')
                             ->label('Yayınlanma zamanı')
                             ->helperText('Boş bırakırsanız gönderi "Yayınla" ile anında yayınlanır. Gelecek bir tarih seçerseniz gönderi o tarihte otomatik yayınlanır.')
-                            ->minDate(now())
+                            ->minDate(now()->startOfMinute())
                             ->seconds(false)
                             ->columnSpanFull(),
                     ]),
