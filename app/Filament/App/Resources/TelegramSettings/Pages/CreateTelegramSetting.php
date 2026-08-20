@@ -16,7 +16,8 @@ class CreateTelegramSetting extends CreateRecord
      */
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['webhook_secret'] = Str::random(32);
+        // Doğrulama kodu, kullanıcı formda "Yeni kod" üretmediyse otomatik üretilir.
+        $data['verification_code'] ??= Str::random(12);
 
         return $data;
     }

@@ -34,7 +34,7 @@ class NotificationService
 
         try {
             $this->telegram->sendMessage(
-                $setting->bot_token,
+                null,
                 $setting->chat_id,
                 $message,
             );

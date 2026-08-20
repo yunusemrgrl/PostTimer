@@ -32,3 +32,12 @@ Schedule::command('instagram:refresh-tokens')
     ->daily()
     ->at('03:00')
     ->withoutOverlapping();
+
+/*
+ * Domain 4 — Yenileme sonrası hâlâ 7 gün içinde kalan (yenilenememiş)
+ * jetonlar için hesap sahibine Telegram bildirimi gönderir.
+ */
+Schedule::command('instagram:notify-expiring-tokens')
+    ->daily()
+    ->at('03:30')
+    ->withoutOverlapping();

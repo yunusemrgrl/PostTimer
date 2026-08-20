@@ -41,4 +41,9 @@ return [
         'host' => env('INSTAGRAM_HOST', 'graph.facebook.com'),
     ],
 
+    'telegram' => [
+        // Takım bazlı ayar girilmediğinde kullanılan varsayılan bot token.
+        'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+    ],
+
 ];

@@ -17,6 +17,12 @@ return Application::configure(basePath: dirname(__DIR__))
             BlockMaliciousRequests::class,
             'throttle:120,1',
         ]);
+
+        // Telegram webhook'u CSRF'ten muaftır: istekler bot'tan gelir, CSRF token göndermez.
+        // Tek bot → tek endpoint; güvenlik, rastgele `verification_code` eşleşmesiyle sağlanır.
+        $middleware->validateCsrfTokens(except: [
+            'telegram/webhook',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

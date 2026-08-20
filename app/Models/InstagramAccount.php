@@ -25,6 +25,7 @@ class InstagramAccount extends Model
         'access_token',
         'api_host',
         'token_expires_at',
+        'token_expiry_notified_at',
         'username',
         'name',
         'account_type',
@@ -55,6 +56,7 @@ class InstagramAccount extends Model
             'media_count' => 'integer',
             'last_synced_at' => 'datetime',
             'token_expires_at' => 'datetime',
+            'token_expiry_notified_at' => 'datetime',
         ];
     }
 

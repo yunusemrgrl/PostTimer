@@ -39,6 +39,7 @@ class RefreshInstagramTokens extends Command
                     'token_expires_at' => $result['expires_in'] > 0
                         ? now()->addSeconds($result['expires_in'])
                         : null,
+                    'token_expiry_notified_at' => null,
                 ])->save();
 
                 $refreshed++;

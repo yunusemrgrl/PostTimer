@@ -9,11 +9,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 /**
- * Domain 4 — Telegram bot doğrulama akışı.
+ * Domain 4 — Telegram bot doğrulama akışı (tek bot, tek endpoint).
  *
- * 1. Kullanıcı panelde bot token girer → verification_code üretilir
- * 2. Kullanıcı Telegram'da bota /start <code> yazar
- * 3. Telegram webhook'a update gönderir → code eşleşirse chat_id kaydedilir
+ * @posttimer_cloud_bot tek bottur. Telegram, tüm güncellemeleri tek
+ * webhook adresine (POST /telegram/webhook) gönderir.
+ *
+ * İlk bağlamada chat_id henüz kayıtlı olmadığı için tenant eşleştirmesi
+ * `verification_code` üzerinden yapılır; eşleşen setting'in chat_id'si
+ * kaydedilir ve is_verified=true yapılır.
  */
 class TelegramWebhookController extends Controller
 {
@@ -21,44 +24,37 @@ class TelegramWebhookController extends Controller
         protected TelegramBotService $telegram,
     ) {}
 
-    /**
-     * Telegram'dan gelen webhook update'ini işler.
-     * Doğrulama kodu eşleşirse chat_id kaydedilir.
-     */
-    public function webhook(Request $request, string $token): JsonResponse
+    public function webhook(Request $request): JsonResponse
     {
-        $setting = TelegramSetting::query()
-            ->where('webhook_secret', $token)
-            ->first();
-
-        if (! $setting) {
-            return response()->json(['ok' => false], 404);
-        }
-
         $parsed = $this->telegram->parseUpdate($request->json()->all());
 
         if (! $parsed['chat_id'] || ! $parsed['text']) {
             return response()->json(['ok' => true]);
         }
 
-        // /start <verification_code> komutunu işle
         $text = trim($parsed['text']);
-        $code = null;
 
-        if (str_starts_with($text, '/start ')) {
-            $code = trim(Str::after($text, '/start '));
-        } elseif ($text === '/start') {
-            // Sadece /start — hoşgeldin mesajı gönder
+        if ($text === '/start') {
             $this->telegram->sendMessage(
-                $setting->bot_token,
+                null,
                 $parsed['chat_id'],
-                "Bot'a hoş geldiniz! Doğrulama için panelinizdeki kodu /start <kod> şeklinde gönderin.",
+                'PostTimer\'a hoş geldiniz! Bildirim almaya başlamak için paneldeki doğrulama kodunu /start KOD şeklinde gönderin.',
             );
 
             return response()->json(['ok' => true]);
         }
 
-        if ($code && $setting->verification_code && hash_equals($setting->verification_code, $code)) {
+        $setting = null;
+
+        if (str_starts_with($text, '/start ')) {
+            $code = trim(Str::after($text, '/start '));
+
+            $setting = TelegramSetting::query()
+                ->where('verification_code', $code)
+                ->first();
+        }
+
+        if ($setting) {
             $setting->forceFill([
                 'chat_id' => $parsed['chat_id'],
                 'is_verified' => true,
@@ -66,7 +62,7 @@ class TelegramWebhookController extends Controller
             ])->save();
 
             $this->telegram->sendMessage(
-                $setting->bot_token,
+                null,
                 $parsed['chat_id'],
                 '✅ Doğrulama başarılı! Artık PostTimer uyarılarını bu sohbette alacaksınız.',
             );

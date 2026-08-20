@@ -16,8 +16,6 @@ class TelegramSetting extends Model
 
     protected $fillable = [
         'team_id',
-        'bot_token',
-        'webhook_secret',
         'chat_id',
         'verification_code',
         'is_verified',
@@ -26,7 +24,6 @@ class TelegramSetting extends Model
     protected function casts(): array
     {
         return [
-            'bot_token' => 'encrypted',
             'chat_id' => 'integer',
             'is_verified' => 'boolean',
         ];
@@ -39,6 +36,6 @@ class TelegramSetting extends Model
 
     public function isConfigured(): bool
     {
-        return $this->is_verified && $this->bot_token && $this->chat_id;
+        return $this->is_verified && $this->chat_id !== null;
     }
 }

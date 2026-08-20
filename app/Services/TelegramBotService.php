@@ -11,22 +11,73 @@ use RuntimeException;
  */
 class TelegramBotService
 {
-    private const API_BASE = 'https://api.telegram.org/bot';
+    // Telegram Bot API: https://api.telegram.org/bot{TOKEN}/{method} (bot ile token arasında slash YOK)
+    private const API_BASE = 'https://api.telegram.org';
 
-    public function sendMessage(string $botToken, int $chatId, string $text): array
+    /**
+     * Açıkça token verilmediğinde config'teki varsayılan (env) token kullanılır.
+     */
+    public function __construct(
+        protected ?string $botToken = null,
+    ) {
+        $this->botToken ??= config('services.telegram.bot_token');
+    }
+
+    public function sendMessage(?string $botToken, int $chatId, string $text): array
     {
+        $botToken = $botToken ?: $this->botToken;
+
         if (empty($botToken) || empty($chatId)) {
             throw new RuntimeException('Telegram bot token veya chat ID eksik.');
         }
 
         $response = Http::timeout(10)
             ->connectTimeout(5)
-            ->post(self::API_BASE."/{$botToken}/sendMessage", [
+            ->post(self::API_BASE."/bot{$botToken}/sendMessage", [
                 'chat_id' => $chatId,
                 'text' => $text,
                 'parse_mode' => 'HTML',
                 'disable_web_page_preview' => false,
             ]);
+
+        return $response->throw()->json();
+    }
+
+    /**
+     * Telegram'ın bu bot için webhook adresini kaydeder.
+     * Telegram, kaydedilen URL'ye update'leri POST eder.
+     */
+    public function setWebhook(?string $botToken, string $url): array
+    {
+        $botToken = $botToken ?: $this->botToken;
+
+        if (empty($botToken)) {
+            throw new RuntimeException('Telegram bot token eksik.');
+        }
+
+        $response = Http::timeout(10)
+            ->connectTimeout(5)
+            ->post(self::API_BASE."/bot{$botToken}/setWebhook", [
+                'url' => $url,
+            ]);
+
+        return $response->throw()->json();
+    }
+
+    /**
+     * Botun mevcut webhook durumunu döner.
+     */
+    public function getWebhookInfo(?string $botToken): array
+    {
+        $botToken = $botToken ?: $this->botToken;
+
+        if (empty($botToken)) {
+            throw new RuntimeException('Telegram bot token eksik.');
+        }
+
+        $response = Http::timeout(10)
+            ->connectTimeout(5)
+            ->get(self::API_BASE."/bot{$botToken}/getWebhookInfo");
 
         return $response->throw()->json();
     }

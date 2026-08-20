@@ -18,8 +18,6 @@ class TelegramSettingFactory extends Factory
     {
         return [
             'team_id' => Team::factory(),
-            'bot_token' => fake()->randomNumber(9).':'.fake()->sha1(),
-            'webhook_secret' => fake()->randomNumber(6).fake()->randomNumber(6),
             'chat_id' => fake()->randomNumber(8),
             'is_verified' => true,
         ];

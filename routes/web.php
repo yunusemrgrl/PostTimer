@@ -20,7 +20,7 @@ Route::middleware(['auth', 'throttle:10,1'])->group(function () {
         ->name('instagram.callback');
 });
 
-Route::post('/telegram/webhook/{token}', [TelegramWebhookController::class, 'webhook'])
+Route::post('/telegram/webhook', [TelegramWebhookController::class, 'webhook'])
     ->name('telegram.webhook');
 
 Route::get('/media/{media:name}/thumbnail', [MediaThumbnailController::class, 'show'])
