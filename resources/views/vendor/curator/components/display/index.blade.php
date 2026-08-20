@@ -4,6 +4,7 @@
     'controls' => null,
     'lazy' => null,
     'player' => false,
+    'poster' => null,
     'iconClasses' => '',
     'constrained' => false,
 ])
@@ -16,6 +17,8 @@
     if (!$src) {
       $src = $item->url;
     }
+
+    $poster ??= $item->thumbnail_url ?? null;
 @endphp
 
 @if (curator()->isPreviewable($item->ext))
@@ -39,9 +42,27 @@
         @if ($controls)
             controls
         @endif
+        @if (filled($poster))
+            poster="{{ $poster }}"
+        @endif
         preload="{{ $lazy ? 'none' : 'auto' }}"
-        {{ $attributes->except(['src', 'controls', 'lazy', 'item']) }}
+        {{ $attributes->except(['src', 'controls', 'lazy', 'item', 'poster']) }}
     ></video>
+@elseif (curator()->isVideo($item->ext) && filled($poster))
+    <img
+        src="{{ $poster }}"
+        alt="{{ $item->alt ?? '' }}"
+        loading="{{ $lazy ? 'lazy' : 'eager' }}"
+        {{
+            $attributes
+                ->merge(['width' => $item->width, 'height' => $item->height])
+                ->except(['src', 'alt', 'lazy', 'item', 'poster'])
+                ->class([
+                    'object-cover' => ! $constrained,
+                    'object-contain' => $constrained,
+                ])
+        }}
+    />
 @else
     <div
         @class([

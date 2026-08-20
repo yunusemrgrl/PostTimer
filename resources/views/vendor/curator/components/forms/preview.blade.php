@@ -2,4 +2,11 @@
     $record = $getRecord();
 @endphp
 
-<x-curator::display :item="$record" :src="$record?->large_url" icon-classes="h-24"/>
+<x-curator::display
+    :item="$record"
+    :src="$record?->large_url"
+    :poster="$record?->thumbnail_url"
+    :controls="true"
+    :player="curator()->isVideo($record?->ext)"
+    icon-classes="h-24"
+/>
