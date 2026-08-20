@@ -133,3 +133,20 @@ it('exposes the url accessor and required columns on a stored media record', fun
         ->and($queried->path)->toBe($path)
         ->and($queried->url)->toBe(Storage::disk('public')->url($path));
 });
+
+it('uses direct video and thumbnail routes for video media previews', function () {
+    $media = Media::factory()->for($this->team)->create([
+        'disk' => 'public',
+        'name' => 'video-file',
+        'path' => 'media/video-file.mp4',
+        'ext' => 'mp4',
+        'type' => 'video/mp4',
+        'curations' => [
+            'video_thumbnail' => 'media/video-file-thumbnail.jpg',
+        ],
+    ]);
+
+    expect($media->thumbnail_url)->toBe(route('media.thumbnail', ['media' => 'video-file']))
+        ->and($media->medium_url)->toBe(route('media.video', ['media' => 'video-file']))
+        ->and($media->large_url)->toBe(route('media.video', ['media' => 'video-file']));
+});

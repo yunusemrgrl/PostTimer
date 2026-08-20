@@ -25,6 +25,7 @@ fly.toml.bak
 /public/storage
 /storage/*.key
 /storage/pail
+/tests/Browser/Screenshots
 /vendor
 _ide_helper.php
 Homestead.json
