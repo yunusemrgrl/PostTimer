@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\InstagramAccount;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -333,11 +334,22 @@ class InstagramPublishingService
             ->timeout($timeout ?? $this->timeout)
             ->connectTimeout($this->connectTimeout)
             ->beforeSending(function (Request $request) {
-                Log::debug('Instagram API REQUEST', [
+                Log::info('Instagram API REQUEST', [
                     'method' => $request->method(),
                     'url' => $this->sanitizeUrl($request->url()),
                     'body' => $this->sanitizeBody($request->body()),
                 ]);
+            })
+            ->withResponseMiddleware(function (Response $response) {
+                Log::info(
+                    'INSTAGRAM_RESPONSE ' . json_encode([
+                        'status' => $response->status(),
+                        'url' => $this->sanitizeUrl($response->request()->url()),
+                        'body' => $this->sanitizeBody($response->body()),
+                    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+                );
+
+                return $response;
             });
     }
 
@@ -350,6 +362,8 @@ class InstagramPublishingService
             return $url;
         }
 
+        $query = [];
+
         if (! empty($parts['query'])) {
             parse_str($parts['query'], $query);
 
@@ -361,15 +375,14 @@ class InstagramPublishingService
                      ] as $key) {
                 unset($query[$key]);
             }
-
-            $parts['query'] = http_build_query($query);
         }
 
-        $result = ($parts['scheme'] ?? 'https').'://'.($parts['host'] ?? '');
+        $result = ($parts['scheme'] ?? 'https') . '://';
+        $result .= $parts['host'] ?? '';
         $result .= $parts['path'] ?? '';
 
-        if (! empty($parts['query'])) {
-            $result .= '?'.$parts['query'];
+        if ($query !== []) {
+            $result .= '?' . http_build_query($query);
         }
 
         return $result;
