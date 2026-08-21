@@ -227,6 +227,7 @@ class InstagramPublishingService
     public function getPublishingLimit(string $igUserId): array
     {
         $response = $this->http()->get("https://{$this->host}/{$this->apiVersion}/{$igUserId}/content_publishing_limit", [
+            'fields' => 'quota_usage,config',
             'access_token' => $this->token,
         ]);
 
