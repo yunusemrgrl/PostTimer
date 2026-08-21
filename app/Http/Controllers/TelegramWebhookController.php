@@ -50,19 +50,9 @@ class TelegramWebhookController extends Controller
         if (str_starts_with($text, '/start ')) {
             $code = trim(Str::after($text, '/start '));
 
-            Log::info('Telegram verification attempt', [
-                'received_code' => $code,
-            ]);
-
             $setting = TelegramSetting::query()
                 ->where('verification_code', $code)
                 ->first();
-
-            Log::info('Telegram verification lookup', [
-                'received_code' => $code,
-                'setting_id' => $setting?->id,
-                'found' => $setting !== null,
-            ]);
         }
 
         if ($setting) {
