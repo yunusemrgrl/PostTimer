@@ -127,11 +127,28 @@ class PublishInstagramPostService
             }
 
             $published = $instagram->publishMedia($post->ig_user_id, $containerId);
-            $log->log('publish.media.published', ['media_id' => $published['id'] ?? null]);
+
+            $mediaId = $published['id'] ?? null;
+
+            $log->log('publish.media.published', [
+                'media_id' => $mediaId,
+            ]);
+
+            $media = $mediaId
+                ? $instagram->getMedia(
+                    $mediaId,
+                    'id,permalink,thumbnail_url,timestamp,like_count,comments_count'
+                )
+                : [];
 
             $post->forceFill([
                 'container_id' => $containerId,
-                'media_id' => $published['id'] ?? null,
+                'media_id' => $mediaId,
+                'permalink' => $media['permalink'] ?? null,
+                'thumbnail_url' => $media['thumbnail_url'] ?? null,
+                'like_count' => $media['like_count'] ?? null,
+                'comments_count' => $media['comments_count'] ?? null,
+                'ig_media_timestamp' => $media['timestamp'] ?? null,
                 'status' => InstagramPost::STATUS_PUBLISHED,
                 'scheduled_at' => null,
                 'error_message' => null,
