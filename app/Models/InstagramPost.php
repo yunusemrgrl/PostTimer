@@ -241,7 +241,21 @@ class InstagramPost extends Model
 
     public function isVideo(): bool
     {
-        return in_array($this->media_type, [self::MEDIA_TYPE_VIDEO, self::MEDIA_TYPE_REELS], true);
+        if (in_array($this->media_type, [
+            self::MEDIA_TYPE_VIDEO,
+            self::MEDIA_TYPE_REELS,
+        ], true)) {
+            return true;
+        }
+
+        $path = parse_url((string) $this->media_url, PHP_URL_PATH);
+
+        return is_string($path)
+            && in_array(
+                strtolower(pathinfo($path, PATHINFO_EXTENSION)),
+                ['mp4', 'mov', 'm4v', 'webm'],
+                true
+            );
     }
 
     public function isReels(): bool
