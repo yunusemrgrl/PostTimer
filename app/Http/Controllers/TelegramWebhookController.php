@@ -6,6 +6,7 @@ use App\Models\TelegramSetting;
 use App\Services\TelegramBotService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
@@ -49,7 +50,7 @@ class TelegramWebhookController extends Controller
         if (str_starts_with($text, '/start ')) {
             $code = trim(Str::after($text, '/start '));
 
-            \Log::info('Telegram verification attempt', [
+            Log::info('Telegram verification attempt', [
                 'received_code' => $code,
             ]);
 
@@ -57,10 +58,11 @@ class TelegramWebhookController extends Controller
                 ->where('verification_code', $code)
                 ->first();
 
-            \Log::info('Telegram verification lookup', [
+            Log::info('Telegram verification lookup', [
                 'received_code' => $code,
                 'setting_id' => $setting?->id,
                 'found' => $setting !== null,
+            ]);
         }
 
         if ($setting) {
