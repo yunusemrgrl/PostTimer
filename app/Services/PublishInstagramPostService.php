@@ -108,6 +108,14 @@ class PublishInstagramPostService
             $containerResumed = $post->container_id !== null;
             $containerId = $post->container_id ?: $this->createContainer($post, $instagram);
 
+            // container_id'yi HEMEN persist ediyoruz. waitForContainerToFinish()
+            // sırasında worker ölürse (deploy, OOM, Flex interrupt), retry
+            // bu container_id'yi bulup yeniden kullanır; yeni container
+            // oluşturmaz (duplicate container / rate limit israfı önlenir).
+            if (! $containerResumed) {
+                $post->forceFill(['container_id' => $containerId])->save();
+            }
+
             $log->log('publish.container.ready', [
                 'resumed' => $containerResumed,
                 'media_type' => $post->media_type,

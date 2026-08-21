@@ -33,7 +33,16 @@ class PublishScheduledPost implements ShouldBeUnique, ShouldQueue
 
     public int $backoff = 60;
 
-    public int $timeout = 120;
+    public int $timeout = 85;
+
+    /**
+     * ShouldBeUnique kilidinin ne kadar süre tutulacağı. Job'un en kötü
+     * ihtimalle tamamlanma süresi: timeout + (tries-1) * backoff + pay.
+     * Bu olmadan varsayılan davranış, kilidi job tamamlanana/failed()
+     * tetiklenene kadar süresiz tutar — worker temiz ölürse kilit
+     * takılı kalabilir ve post bir daha hiç dispatch edilemez.
+     */
+    public int $uniqueFor = 600;
 
     public function __construct(
         public InstagramPost $post,

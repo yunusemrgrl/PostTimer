@@ -242,8 +242,8 @@ class InstagramPublishingService
         $limit = $this->getPublishingLimit($igUserId);
         $entry = $limit['data'][0] ?? throw new RuntimeException('Instagram yayın limiti bilgisi alınamadı.');
 
-        $quotaUsed = (int) ($entry['quota_used'] ?? throw new RuntimeException('Instagram yayın limiti bilgisi eksik (quota_used).'));
-        $quotaTotal = (int) ($entry['quota_total'] ?? throw new RuntimeException('Instagram yayın limiti bilgisi eksik (quota_total).'));
+        $quotaUsed = (int) ($entry['quota_usage'] ?? throw new RuntimeException('Instagram yayın limiti bilgisi eksik (quota_usage).'));
+        $quotaTotal = (int) ($entry['config']['quota_total'] ?? throw new RuntimeException('Instagram yayın limiti bilgisi eksik (quota_total).'));
 
         return $quotaUsed < $quotaTotal;
     }
