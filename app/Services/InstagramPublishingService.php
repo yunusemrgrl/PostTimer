@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Models\InstagramAccount;
+use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class InstagramPublishingService
@@ -329,6 +331,75 @@ class InstagramPublishingService
     {
         return Http::acceptJson()
             ->timeout($timeout ?? $this->timeout)
-            ->connectTimeout($this->connectTimeout);
+            ->connectTimeout($this->connectTimeout)
+            ->beforeSending(function (Request $request) {
+                Log::debug('Instagram API REQUEST', [
+                    'method' => $request->method(),
+                    'url' => $this->sanitizeUrl($request->url()),
+                    'body' => $this->sanitizeBody($request->body()),
+                ]);
+            });
+    }
+
+
+    protected function sanitizeUrl(string $url): string
+    {
+        $parts = parse_url($url);
+
+        if ($parts === false) {
+            return $url;
+        }
+
+        if (! empty($parts['query'])) {
+            parse_str($parts['query'], $query);
+
+            foreach ([
+                         'access_token',
+                         'client_secret',
+                         'token',
+                         'secret',
+                     ] as $key) {
+                unset($query[$key]);
+            }
+
+            $parts['query'] = http_build_query($query);
+        }
+
+        $result = ($parts['scheme'] ?? 'https').'://'.($parts['host'] ?? '');
+        $result .= $parts['path'] ?? '';
+
+        if (! empty($parts['query'])) {
+            $result .= '?'.$parts['query'];
+        }
+
+        return $result;
+    }
+
+    protected function sanitizeBody(?string $body): mixed
+    {
+        if ($body === null || $body === '') {
+            return $body;
+        }
+
+        $json = json_decode($body, true);
+
+        if (! is_array($json)) {
+            return $body;
+        }
+
+        foreach ([
+                     'access_token',
+                     'client_secret',
+                     'token',
+                     'secret',
+                     'Authorization',
+                     'authorization',
+                 ] as $key) {
+            if (array_key_exists($key, $json)) {
+                $json[$key] = '[REDACTED]';
+            }
+        }
+
+        return $json;
     }
 }
