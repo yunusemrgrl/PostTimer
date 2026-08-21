@@ -23,6 +23,7 @@ class InstagramPostFactory extends Factory
             'team_id' => Team::factory(),
             'ig_user_id' => (string) fake()->randomNumber(8),
             'media_type' => InstagramPost::MEDIA_TYPE_IMAGE,
+            'media_product_type' => InstagramPost::PRODUCT_TYPE_FEED,
             'caption' => fake()->sentence(),
             'media_url' => 'https://example.com/images/'.Str::random(8).'.jpg',
             'story_link' => null,
@@ -64,7 +65,49 @@ class InstagramPostFactory extends Factory
             'status' => InstagramPost::STATUS_PUBLISHED,
             'container_id' => (string) fake()->randomNumber(8),
             'media_id' => (string) fake()->randomNumber(8),
+            'permalink' => 'https://www.instagram.com/p/'.Str::random(10).'/',
+            'ig_media_timestamp' => now(),
             'published_at' => now(),
+        ]);
+    }
+
+    /**
+     * Reels olarak yayınlanacak bir video gönderisi.
+     */
+    public function reels(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'media_type' => InstagramPost::MEDIA_TYPE_VIDEO,
+            'media_product_type' => InstagramPost::PRODUCT_TYPE_REELS,
+            'media_url' => 'https://example.com/videos/'.Str::random(8).'.mp4',
+        ]);
+    }
+
+    /**
+     * Story olarak yayınlanacak bir gönderi.
+     */
+    public function story(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'media_type' => InstagramPost::MEDIA_TYPE_IMAGE,
+            'media_product_type' => InstagramPost::PRODUCT_TYPE_STORY,
+            'media_url' => 'https://example.com/images/'.Str::random(8).'.jpg',
+        ]);
+    }
+
+    /**
+     * Carousel olarak yayınlanacak bir gönderi.
+     */
+    public function carousel(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'media_type' => InstagramPost::MEDIA_TYPE_CAROUSEL_ALBUM,
+            'media_product_type' => InstagramPost::PRODUCT_TYPE_FEED,
+            'media_url' => null,
+            'children' => [
+                ['url' => 'https://example.com/images/'.Str::random(8).'.jpg'],
+                ['url' => 'https://example.com/images/'.Str::random(8).'.jpg'],
+            ],
         ]);
     }
 

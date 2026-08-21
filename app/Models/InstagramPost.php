@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class InstagramPost extends Model
 {
@@ -33,12 +34,22 @@ class InstagramPost extends Model
 
     public const MEDIA_TYPE_CAROUSEL = 'CAROUSEL';
 
+    public const MEDIA_TYPE_CAROUSEL_ALBUM = 'CAROUSEL_ALBUM';
+
+    public const PRODUCT_TYPE_FEED = 'FEED';
+
+    public const PRODUCT_TYPE_REELS = 'REELS';
+
+    public const PRODUCT_TYPE_STORY = 'STORY';
+
     protected $fillable = [
         'team_id',
         'ig_user_id',
         'media_type',
+        'media_product_type',
         'caption',
         'media_url',
+        'thumbnail_url',
         'story_link',
         'first_comment',
         'children',
@@ -47,13 +58,21 @@ class InstagramPost extends Model
         'product_id',
         'container_id',
         'media_id',
+        'permalink',
+        'like_count',
+        'comments_count',
         'status',
         'scheduled_at',
         'error_message',
         'published_at',
+        'ig_media_timestamp',
     ];
 
     /**
+     * Mevcut UI için medya türü etiketleri. Eski REELS/STORIES/CAROUSEL
+     * değerleri geriye dönük uyumluluk için korunur; yeni kod
+     * media_type + media_product_type iki eksenini kullanmalıdır.
+     *
      * @return array<string, string>
      */
     public static function mediaTypes(): array
@@ -64,6 +83,20 @@ class InstagramPost extends Model
             self::MEDIA_TYPE_REELS => 'Reels',
             self::MEDIA_TYPE_STORIES => 'Hikaye',
             self::MEDIA_TYPE_CAROUSEL => 'Karusel',
+        ];
+    }
+
+    /**
+     * Meta'nın IG Media modeline uygun media_product_type etiketleri.
+     *
+     * @return array<string, string>
+     */
+    public static function productTypes(): array
+    {
+        return [
+            self::PRODUCT_TYPE_FEED => 'Feed',
+            self::PRODUCT_TYPE_REELS => 'Reels',
+            self::PRODUCT_TYPE_STORY => 'Hikaye',
         ];
     }
 
@@ -88,9 +121,10 @@ class InstagramPost extends Model
     public static function mediaTypeColor(string $type): string
     {
         return match ($type) {
-            self::MEDIA_TYPE_REELS => 'info',
+            self::MEDIA_TYPE_REELS, self::PRODUCT_TYPE_REELS => 'info',
             self::MEDIA_TYPE_VIDEO => 'warning',
-            self::MEDIA_TYPE_CAROUSEL => 'success',
+            self::MEDIA_TYPE_CAROUSEL, self::MEDIA_TYPE_CAROUSEL_ALBUM => 'success',
+            self::MEDIA_TYPE_STORIES, self::PRODUCT_TYPE_STORY => 'gray',
             default => 'gray',
         };
     }
@@ -210,13 +244,107 @@ class InstagramPost extends Model
         return in_array($this->media_type, [self::MEDIA_TYPE_VIDEO, self::MEDIA_TYPE_REELS], true);
     }
 
+    public function isReels(): bool
+    {
+        return $this->media_product_type === self::PRODUCT_TYPE_REELS
+            || $this->media_type === self::MEDIA_TYPE_REELS;
+    }
+
+    public function isCarousel(): bool
+    {
+        return in_array($this->media_type, [self::MEDIA_TYPE_CAROUSEL, self::MEDIA_TYPE_CAROUSEL_ALBUM], true);
+    }
+
+    /**
+     * Meta API'ye gönderilecek publishing media_type değerini döndürür.
+     * Publishing endpoint'i DB media_type değerinden farklı değerler kabul eder
+     * (örn. VIDEO+REELS → media_type=REELS, IMAGE+STORY → media_type=STORIES).
+     *
+     * @see Postman koleksiyonu: "Create a video container" — media_type=REELS/STORIES
+     */
+    public function publishingMediaType(): string
+    {
+        // Carousel ayrı akış — createCarouselContainer içinde media_type=CAROUSEL gönderilir.
+        if ($this->isCarousel()) {
+            return self::MEDIA_TYPE_CAROUSEL;
+        }
+
+        $product = $this->media_product_type;
+
+        // STORY → STORIES (Meta publishing media_type değeri)
+        if ($product === self::PRODUCT_TYPE_STORY) {
+            return self::MEDIA_TYPE_STORIES;
+        }
+
+        // REELS → REELS (Meta publishing media_type değeri)
+        if ($product === self::PRODUCT_TYPE_REELS) {
+            return self::MEDIA_TYPE_REELS;
+        }
+
+        // Eski tek-eksenli geriye dönük uyumluluk: media_type=REELS/STORIES
+        // direkt kullanılmışsa koru.
+        if ($this->media_type === self::MEDIA_TYPE_REELS) {
+            return self::MEDIA_TYPE_REELS;
+        }
+
+        if ($this->media_type === self::MEDIA_TYPE_STORIES) {
+            return self::MEDIA_TYPE_STORIES;
+        }
+
+        // IMAGE + FEED → IMAGE, VIDEO + FEED → VIDEO
+        return $this->media_type;
+    }
+
+    /**
+     * Bu post için Meta Insights endpoint'inden çekilebilecek metric listesini
+     * media_product_type'a göre döndürür. CAROUSEL_ALBUM için boş dizi
+     * (Meta carousel medya insights'larını desteklemiyor).
+     *
+     * @return array<int, string>
+     */
+    public function supportedInsightMetrics(): array
+    {
+        // Carousel medya insights desteklenmiyor.
+        if ($this->isCarousel()) {
+            return [];
+        }
+
+        // Tüm medya tipleri için ortak metric'ler.
+        $metrics = ['impressions', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions'];
+
+        $product = $this->media_product_type ?? ($this->isReels() ? self::PRODUCT_TYPE_REELS : null);
+
+        if ($product === self::PRODUCT_TYPE_REELS || $this->media_type === self::MEDIA_TYPE_REELS) {
+            $metrics = array_merge($metrics, [
+                'views',
+                'ig_reels_video_view_total_time',
+                'ig_reels_avg_watch_time',
+            ]);
+        }
+
+        if ($product === self::PRODUCT_TYPE_STORY || $this->media_type === self::MEDIA_TYPE_STORIES) {
+            $metrics = [
+                'replies',
+                'navigation',
+                'follows',
+                'profile_visits',
+                'profile_activity',
+            ];
+        }
+
+        return $metrics;
+    }
+
     protected function casts(): array
     {
         return [
             'children' => 'array',
             'is_ai_generated' => 'boolean',
+            'like_count' => 'integer',
+            'comments_count' => 'integer',
             'published_at' => 'datetime',
             'scheduled_at' => 'datetime',
+            'ig_media_timestamp' => 'datetime',
         ];
     }
 
@@ -238,10 +366,19 @@ class InstagramPost extends Model
     }
 
     /**
+     * Bu posta ait insights snapshot'ları (tarihsel trend için).
+     */
+    public function insights(): HasMany
+    {
+        return $this->hasMany(InstagramPostInsight::class);
+    }
+
+    /**
      * Story gönderileri için story_link alanı dolu mu?
      */
     public function isStory(): bool
     {
-        return $this->media_type === self::MEDIA_TYPE_STORIES;
+        return $this->media_product_type === self::PRODUCT_TYPE_STORY
+            || $this->media_type === self::MEDIA_TYPE_STORIES;
     }
 }

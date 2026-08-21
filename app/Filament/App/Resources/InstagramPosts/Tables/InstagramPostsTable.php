@@ -24,9 +24,14 @@ class InstagramPostsTable
             ->columns([
                 TextColumn::make('media_type')
                     ->label('Tür')
-                    ->formatStateUsing(fn (string $state) => InstagramPost::mediaTypes()[$state] ?? $state)
+                    ->formatStateUsing(function (InstagramPost $record): string {
+                        // Yeni iki eksenli modelde product type daha anlamlı.
+                        $product = $record->media_product_type;
+
+                        return InstagramPost::productTypes()[$product] ?? InstagramPost::mediaTypes()[$record->media_type] ?? $record->media_type;
+                    })
                     ->badge()
-                    ->color(fn (string $state) => InstagramPost::mediaTypeColor($state)),
+                    ->color(fn (string $state): string => InstagramPost::mediaTypeColor($state)),
 
                 TextColumn::make('caption')
                     ->label('Açıklama')
@@ -45,6 +50,25 @@ class InstagramPostsTable
                     ->formatStateUsing(fn (string $state) => InstagramPost::statuses()[$state] ?? $state)
                     ->badge()
                     ->color(fn (string $state) => InstagramPost::statusColor($state)),
+
+                TextColumn::make('like_count')
+                    ->label('Beğeni')
+                    ->numeric()
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('comments_count')
+                    ->label('Yorum')
+                    ->numeric()
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('permalink')
+                    ->label('Link')
+                    ->url(fn (InstagramPost $record): ?string => $record->permalink)
+                    ->openUrlInNewTab()
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('scheduled_at')
                     ->label('Planlanan Zaman')

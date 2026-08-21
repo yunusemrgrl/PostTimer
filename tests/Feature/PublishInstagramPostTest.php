@@ -240,12 +240,13 @@ it('sends VIDEO posts to the Meta API as REELS', function () {
         // 4. POST /media_publish → yayın
         ->push(['id' => 'ig_media_1']);
 
-    // Uygulama DB'sinde media_type=VIDEO; Meta API artık VIDEO'yu reddettiği için
-    // createContainer() boundary'sinde REELS'e çevrilmelidir.
+    // Uygulama DB'sinde media_type=VIDEO + media_product_type=REELS;
+    // Meta API'ye media_type=REELS olarak gönderilir.
     $videoUrl = 'https://example.com/videos/test.mp4';
 
     $post = InstagramPost::factory()->create([
         'media_type' => InstagramPost::MEDIA_TYPE_VIDEO,
+        'media_product_type' => InstagramPost::PRODUCT_TYPE_REELS,
         'media_url' => $videoUrl,
     ]);
 

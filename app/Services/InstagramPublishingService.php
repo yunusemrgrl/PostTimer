@@ -213,8 +213,39 @@ class InstagramPublishingService
     public function getAccountMedia(string $igUserId, int $limit = 25): array
     {
         $response = $this->http()->get("https://{$this->host}/{$this->apiVersion}/{$igUserId}/media", [
-            'fields' => 'id,caption,media_type,media_url,permalink,thumbnail_url,timestamp,like_count,comments_count',
+            'fields' => 'id,caption,media_type,media_product_type,media_url,permalink,thumbnail_url,timestamp,like_count,comments_count',
             'limit' => $limit,
+            'access_token' => $this->token,
+        ]);
+
+        return $response->throw()->json();
+    }
+
+    /**
+     * Belirli bir medyanın alanlarını getirir.
+     *
+     * @return array<string, mixed>
+     */
+    public function getMedia(string $mediaId, string $fields = 'id,caption,media_type,media_product_type,media_url,permalink,thumbnail_url,timestamp,like_count,comments_count'): array
+    {
+        $response = $this->http()->get("https://{$this->host}/{$this->apiVersion}/{$mediaId}", [
+            'fields' => $fields,
+            'access_token' => $this->token,
+        ]);
+
+        return $response->throw()->json();
+    }
+
+    /**
+     * Bir medya için insights metriklerini getirir.
+     *
+     * @param  array<int, string>  $metrics
+     * @return array<string, mixed>
+     */
+    public function getMediaInsights(string $mediaId, array $metrics): array
+    {
+        $response = $this->http()->get("https://{$this->host}/{$this->apiVersion}/{$mediaId}/insights", [
+            'metric' => implode(',', $metrics),
             'access_token' => $this->token,
         ]);
 

@@ -317,16 +317,14 @@ class PublishInstagramPostService
      */
     protected function createContainer(InstagramPost $post, InstagramPublishingService $instagram): string
     {
-        if ($post->media_type === InstagramPost::MEDIA_TYPE_CAROUSEL) {
+        if ($post->isCarousel()) {
             return $this->createCarouselContainer($post, $instagram);
         }
 
-        // TODO: Instagram API artık VIDEO media_type'ını desteklemiyor.
-        // Uygulama tarafında VIDEO korunuyor ancak Meta API'ye REELS olarak gönderiliyor.
-        // İleride VIDEO/REELS ayrımı uygulamanın domain modelinde yeniden ele alınabilir.
-        $metaMediaType = $post->media_type === InstagramPost::MEDIA_TYPE_VIDEO
-            ? InstagramPost::MEDIA_TYPE_REELS
-            : $post->media_type;
+        // Meta publishing media_type değeri: DB media_type + media_product_type'tan
+        // türetilir. VIDEO+REELS → REELS, IMAGE+STORY → STORIES, vb.
+        // (Postman koleksiyonu: "Create a video container" — media_type=REELS/STORIES)
+        $metaMediaType = $post->publishingMediaType();
 
         $container = $instagram->createMediaContainer($post->ig_user_id, array_filter([
             'caption' => $post->caption,
