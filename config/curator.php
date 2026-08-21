@@ -17,6 +17,7 @@ return [
     'default_disk' => env('CURATOR_DEFAULT_DISK', env('FILESYSTEM_DISK', 'r2')),
     'default_directory' => null,
     'default_visibility' => 'public',
+    'max_size' => 102400,
     'features' => [
         'curations' => true,
         'file_swap' => true,

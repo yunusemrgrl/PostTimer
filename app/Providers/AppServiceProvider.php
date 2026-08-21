@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\Media;
 use App\Observers\MediaObserver;
+use Awcodes\Curator\Facades\Curator;
 use Awcodes\Curator\Facades\Glide;
 use Awcodes\Curator\Glide\SymfonyResponseFactory;
 use Illuminate\Support\Facades\Gate;
@@ -50,5 +51,6 @@ class AppServiceProvider extends ServiceProvider
         }
 
         Media::observe(MediaObserver::class);
+        Curator::maxSize(102400);
     }
 }
