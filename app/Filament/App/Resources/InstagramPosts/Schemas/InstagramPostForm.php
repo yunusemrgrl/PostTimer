@@ -53,6 +53,7 @@ class InstagramPostForm
                                 InstagramPost::MEDIA_TYPE_VIDEO, InstagramPost::MEDIA_TYPE_REELS => ['video/*'],
                                 default => ['image/*', 'video/*'],
                             })
+                            ->maxSize(102400)
                             ->required(fn (Get $get): bool => $get('media_type') !== InstagramPost::MEDIA_TYPE_CAROUSEL)
                             ->visible(fn (Get $get): bool => $get('media_type') !== InstagramPost::MEDIA_TYPE_CAROUSEL)
                             ->afterStateHydrated(function (CuratorPicker $component, mixed $state): void {
