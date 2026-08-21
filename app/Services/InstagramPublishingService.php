@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\InstagramAccount;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -334,18 +333,19 @@ class InstagramPublishingService
             ->timeout($timeout ?? $this->timeout)
             ->connectTimeout($this->connectTimeout)
             ->beforeSending(function (Request $request) {
-                Log::info('Instagram API REQUEST', [
-                    'method' => $request->method(),
-                    'url' => $this->sanitizeUrl($request->url()),
-                    'body' => $this->sanitizeBody($request->body()),
-                ]);
+                Log::info(
+                    'INSTAGRAM_REQUEST ' . json_encode([
+                        'method' => $request->method(),
+                        'url' => $this->sanitizeUrl($request->url()),
+                        'body' => $this->sanitizeBody($request->body()),
+                    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+                );
             })
-            ->withResponseMiddleware(function (Response $response) {
+            ->withResponseMiddleware(function ($response) {
                 Log::info(
                     'INSTAGRAM_RESPONSE ' . json_encode([
-                        'status' => $response->status(),
-                        'url' => $this->sanitizeUrl($response->request()->url()),
-                        'body' => $this->sanitizeBody($response->body()),
+                        'status' => $response->getStatusCode(),
+                        'body' => (string) $response->getBody(),
                     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
                 );
 
