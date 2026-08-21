@@ -304,35 +304,45 @@ class InstagramPost extends Model
      */
     public function supportedInsightMetrics(): array
     {
-        // Carousel medya insights desteklenmiyor.
         if ($this->isCarousel()) {
             return [];
         }
 
-        // Tüm medya tipleri için ortak metric'ler.
-        $metrics = ['impressions', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions'];
+        $product = $this->media_product_type
+            ?? ($this->isReels() ? self::PRODUCT_TYPE_REELS : null);
 
-        $product = $this->media_product_type ?? ($this->isReels() ? self::PRODUCT_TYPE_REELS : null);
-
-        if ($product === self::PRODUCT_TYPE_REELS || $this->media_type === self::MEDIA_TYPE_REELS) {
-            $metrics = array_merge($metrics, [
+        return match ($product) {
+            self::PRODUCT_TYPE_REELS => [
+                'reach',
+                'likes',
+                'comments',
+                'saved',
+                'shares',
+                'total_interactions',
                 'views',
                 'ig_reels_video_view_total_time',
                 'ig_reels_avg_watch_time',
-            ]);
-        }
+            ],
 
-        if ($product === self::PRODUCT_TYPE_STORY || $this->media_type === self::MEDIA_TYPE_STORIES) {
-            $metrics = [
+            self::PRODUCT_TYPE_STORY => [
                 'replies',
                 'navigation',
                 'follows',
                 'profile_visits',
                 'profile_activity',
-            ];
-        }
+            ],
 
-        return $metrics;
+            default => [
+                'impressions',
+                'reach',
+                'likes',
+                'comments',
+                'saved',
+                'shares',
+                'total_interactions',
+                'views',
+            ],
+        };
     }
 
     protected function casts(): array
