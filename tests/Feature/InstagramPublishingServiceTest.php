@@ -151,7 +151,7 @@ it('detects when the 24-hour publishing quota is exhausted', function () {
     Http::fake([
         'https://graph.facebook.com/*content_publishing_limit*' => Http::response([
             'data' => [
-                ['quota_total' => 100, 'quota_used' => 100],
+                ['quota_usage' => 100, 'config' => ['quota_total' => 100]],
             ],
         ]),
         '*' => Http::response(),

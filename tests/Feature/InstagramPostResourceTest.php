@@ -184,7 +184,7 @@ it('publishes a draft post through the table action', function () {
 
     Http::fake([
         'https://graph.instagram.com/*content_publishing_limit*' => Http::response([
-            'data' => [['quota_total' => 100, 'quota_used' => 10]],
+            'data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]],
         ]),
         'https://graph.instagram.com/*/media' => Http::response(['id' => 'ig_container_1']),
         'https://graph.instagram.com/*/media_publish' => Http::response(['id' => 'ig_media_1']),

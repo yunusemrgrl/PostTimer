@@ -58,7 +58,7 @@ it('logs every publish flow stage with correlation context without changing beha
     enablePublishFlowLog();
 
     Http::fakeSequence()
-        ->push(['data' => [['quota_total' => 100, 'quota_used' => 10]]])
+        ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
         ->push(['id' => 'ig_container_1'])
         ->push(['id' => 'ig_media_1']);
 
@@ -113,7 +113,7 @@ it('logs the error stage without changing H1 retry behavior', function () {
 
     Http::fake([
         'https://graph.instagram.com/*content_publishing_limit*' => Http::response([
-            'data' => [['quota_total' => 100, 'quota_used' => 10]],
+            'data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]],
         ]),
         'https://graph.instagram.com/*/media' => Http::response([
             'error' => ['message' => 'Temporary', 'type' => 'OAuthException'],
@@ -173,7 +173,7 @@ it('warns when the media url is not publicly reachable', function () {
     enablePublishFlowLog();
 
     Http::fakeSequence()
-        ->push(['data' => [['quota_total' => 100, 'quota_used' => 10]]])
+        ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
         ->push(['id' => 'ig_container_1'])
         ->push(['id' => 'ig_media_1']);
 
@@ -202,7 +202,7 @@ it('warns when the media url points at a storage api host instead of a public ho
     enablePublishFlowLog();
 
     Http::fakeSequence()
-        ->push(['data' => [['quota_total' => 100, 'quota_used' => 10]]])
+        ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
         ->push(['id' => 'ig_container_1'])
         ->push(['id' => 'ig_media_1']);
 
@@ -228,7 +228,7 @@ it('propagates the manual flow id from publishNow into the publish stages', func
     enablePublishFlowLog();
 
     Http::fakeSequence()
-        ->push(['data' => [['quota_total' => 100, 'quota_used' => 10]]])
+        ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
         ->push(['id' => 'ig_container_1'])
         ->push(['id' => 'ig_media_1']);
 

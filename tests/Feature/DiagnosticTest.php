@@ -55,7 +55,7 @@ test('DEBUG publish-scheduled job runs and dispatches PostPublishFailed', functi
 
     Http::fake([
         'https://graph.instagram.com/*content_publishing_limit*' => Http::response([
-            'data' => [['quota_total' => 100, 'quota_used' => 10]],
+            'data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]],
         ]),
         'https://graph.instagram.com/*/media' => Http::response(['error' => ['message' => 'Invalid']], 400),
         'api.telegram.org/*' => Http::response(['ok' => true]),

@@ -30,7 +30,7 @@ function connectAccountFor(InstagramPost $post): InstagramAccount
 
 it('publishes a draft image post end to end', function () {
     Http::fakeSequence()
-        ->push(['data' => [['quota_total' => 100, 'quota_used' => 10]]])
+        ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
         ->push(['id' => 'ig_container_1'])
         ->push(['id' => 'ig_media_1']);
 
@@ -79,7 +79,7 @@ it('does not re-publish an already published post (idempotency)', function () {
 
 it('resumes from existing container_id on retry (idempotency)', function () {
     Http::fakeSequence()
-        ->push(['data' => [['quota_total' => 100, 'quota_used' => 10]]])
+        ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
         ->push(['id' => 'ig_media_1']);
 
     $post = InstagramPost::factory()->create([
@@ -107,7 +107,7 @@ it('resumes from existing container_id on retry (idempotency)', function () {
 it('leaves a failed publish retryable (publishing) without dispatching the failure event', function () {
     Http::fake([
         'https://graph.instagram.com/*content_publishing_limit*' => Http::response([
-            'data' => [['quota_total' => 100, 'quota_used' => 10]],
+            'data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]],
         ]),
         'https://graph.instagram.com/*/media' => Http::response([
             'error' => ['message' => 'Invalid media url', 'type' => 'OAuthException'],
@@ -133,9 +133,9 @@ it('leaves a failed publish retryable (publishing) without dispatching the failu
 it('re-publishes after a transient failure via retry reclaim', function () {
     // Tek sıra: 1. deneme (limit + /media hatası) → 2. deneme (limit + container + publish)
     Http::fakeSequence()
-        ->push(['data' => [['quota_total' => 100, 'quota_used' => 10]]])
+        ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
         ->push(['error' => ['message' => 'Temporary', 'type' => 'OAuthException']], 400)
-        ->push(['data' => [['quota_total' => 100, 'quota_used' => 10]]])
+        ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
         ->push(['id' => 'ig_container_1'])
         ->push(['id' => 'ig_media_1'])
         ->dontFailWhenEmpty();
@@ -177,7 +177,7 @@ it('marks the post failed and dispatches the event once when the job permanently
 it('refuses to publish when the account is out of quota', function () {
     Http::fake([
         'https://graph.instagram.com/*content_publishing_limit*' => Http::response([
-            'data' => [['quota_total' => 100, 'quota_used' => 100]],
+            'data' => [['quota_usage' => 100, 'config' => ['quota_total' => 100]]],
         ]),
         '*' => Http::response(),
     ]);
@@ -227,4 +227,46 @@ it('refuses to publish when the connected account has no token', function () {
 
     Event::assertNotDispatched(PostPublishFailed::class);
     Http::assertNothingSent();
+});
+
+it('sends VIDEO posts to the Meta API as REELS', function () {
+    Http::fakeSequence()
+        // 1. content_publishing_limit kontrolü
+        ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
+        // 2. POST /media → container oluşturma (media_type=REELS olarak gönderilir)
+        ->push(['id' => 'ig_container_1'])
+        // 3. GET /{container_id} → isVideo() true olduğu için waitForContainerToFinish() poll
+        ->push(['status_code' => 'FINISHED'])
+        // 4. POST /media_publish → yayın
+        ->push(['id' => 'ig_media_1']);
+
+    // Uygulama DB'sinde media_type=VIDEO; Meta API artık VIDEO'yu reddettiği için
+    // createContainer() boundary'sinde REELS'e çevrilmelidir.
+    $videoUrl = 'https://example.com/videos/test.mp4';
+
+    $post = InstagramPost::factory()->create([
+        'media_type' => InstagramPost::MEDIA_TYPE_VIDEO,
+        'media_url' => $videoUrl,
+    ]);
+
+    connectAccountFor($post);
+
+    (new PublishInstagramPostService)->publish($post);
+
+    expect($post->fresh())
+        ->status->toBe(InstagramPost::STATUS_PUBLISHED)
+        ->media_id->toBe('ig_media_1');
+
+    // Container oluşturma isteğinde: media_type=REELS ve video_url doğru gönderildi
+    Http::assertSent(function ($request) use ($videoUrl) {
+        return $request->method() === 'POST'
+            && str_contains($request->url(), '/media')
+            && ! str_contains($request->url(), 'media_publish')
+            && ! str_contains($request->url(), 'content_publishing_limit')
+            && ($request['media_type'] ?? null) === 'REELS'
+            && ($request['video_url'] ?? null) === $videoUrl;
+    });
+
+    // DB'deki media_type korunur — domain modeli değişmez
+    expect($post->fresh()->media_type)->toBe(InstagramPost::MEDIA_TYPE_VIDEO);
 });
