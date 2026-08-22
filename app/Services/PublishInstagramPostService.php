@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+use App\Domain\Instagram\InstagramMediaFactory;
+use App\Domain\Instagram\Media\CarouselChild;
+use App\Domain\Instagram\Media\CarouselMedia;
 use App\Events\PostPublished;
 use App\Events\PostPublishFailed;
 use App\Models\InstagramAccount;
@@ -89,10 +92,10 @@ class PublishInstagramPostService
             // Gözlem: Instagram'a gönderilecek GERÇEK medya URL(leri).
             // "Invalid media url" hatalarında hangi URL'nin iletildiğini
             // görmek için container oluşturulmadan ÖNCE loglanır.
-            $childUrls = $post->media_type === InstagramPost::MEDIA_TYPE_CAROUSEL
+            $childUrls = $post->isCarousel()
                 ? collect($post->children ?? [])
                     ->filter()
-                    ->map(fn (mixed $child): string => $this->childUrl($child))
+                    ->map(fn (mixed $child): string => CarouselChild::from($child)->url)
                     ->values()
                     ->all()
                 : [];
@@ -334,78 +337,57 @@ class PublishInstagramPostService
      */
     protected function createContainer(InstagramPost $post, InstagramPublishingService $instagram): string
     {
-        if ($post->isCarousel()) {
-            return $this->createCarouselContainer($post, $instagram);
+        $media = InstagramMediaFactory::instance()->make($post);
+
+        // Carousel ayrı akış: önce item container'ları, sonra karusel container'ı.
+        if ($media->isCarousel()) {
+            return $this->createCarouselContainer($media, $instagram);
         }
 
-        // Meta publishing media_type değeri: DB media_type + media_product_type'tan
-        // türetilir. VIDEO+REELS → REELS, IMAGE+STORY → STORIES, vb.
-        // (Postman koleksiyonu: "Create a video container" — media_type=REELS/STORIES)
-        $metaMediaType = $post->publishingMediaType();
-
-        $container = $instagram->createMediaContainer($post->ig_user_id, array_filter([
-            'caption' => $post->caption,
-            'is_ai_generated' => $post->is_ai_generated ?: null,
-            'alt_text' => $post->alt_text !== null ? ['text' => $post->alt_text] : null,
-            'media_type' => $metaMediaType,
-            'story_link' => $post->isStory() ? $post->story_link : null,
-            'video_url' => $post->isVideo() ? $post->media_url : null,
-            'image_url' => $post->isVideo() ? null : $post->media_url,
-        ], fn ($value) => $value !== null));
+        // Meta publishing media_type değerini ve hangi URL alanının (video_url /
+        // image_url) kullanılacağını domain katmanı belirler; burada yalnızca
+        // typed payload HTTP servisine gönderilir.
+        $container = $instagram->createMediaContainerPayload(
+            $post->ig_user_id,
+            $media->buildContainerPayload(),
+        );
 
         return (string) $container['id'];
     }
 
-    protected function createCarouselContainer(InstagramPost $post, InstagramPublishingService $instagram): string
+    protected function createCarouselContainer(CarouselMedia $media, InstagramPublishingService $instagram): string
     {
-        $children = collect($post->children ?? [])->filter()->values();
-        $count = $children->count();
+        $children = $media->childUrls();
+        $count = count($children);
 
         if ($count < 2 || $count > 10) {
             throw new RuntimeException('Karusel gönderileri 2 ile 10 medya içermelidir.');
         }
 
-        $childIds = $children
-            ->map(fn ($child): string => $this->createCarouselItemContainer(
-                $post->ig_user_id,
-                $this->childUrl($child),
+        $childIds = array_map(
+            fn (CarouselChild $child): string => $this->createCarouselItemContainer(
+                $media->post(),
+                $child,
                 $instagram,
-            ))
-            ->all();
+            ),
+            $children,
+        );
 
         $carousel = $instagram->createCarouselContainer(
-            $post->ig_user_id,
+            $media->post()->ig_user_id,
             $childIds,
-            array_filter([
-                'caption' => $post->caption,
-                'is_ai_generated' => $post->is_ai_generated ?: null,
-            ], fn ($value) => $value !== null),
+            $media->buildContainerPayload($childIds)->toPayload(),
         );
 
         return (string) $carousel['id'];
     }
 
-    /**
-     * Karusel medyaları formda `['url' => ...]` dizileri olarak tutulur;
-     * düz string URL'ler de desteklenir.
-     */
-    protected function childUrl(mixed $child): string
+    protected function createCarouselItemContainer(InstagramPost $post, CarouselChild $child, InstagramPublishingService $instagram): string
     {
-        if (is_array($child)) {
-            return (string) ($child['url'] ?? '');
-        }
-
-        return (string) $child;
-    }
-
-    protected function createCarouselItemContainer(string $igUserId, string $url, InstagramPublishingService $instagram): string
-    {
-        $isVideo = preg_match('/\.(mp4|mov)(\?|$)/i', $url) === 1;
-
-        $container = $instagram->createMediaContainer($igUserId, [
-            $isVideo ? 'video_url' : 'image_url' => $url,
-            'is_carousel_item' => true,
-        ]);
+        $container = $instagram->createMediaContainerPayload(
+            $post->ig_user_id,
+            $child->containerPayload(),
+        );
 
         return (string) $container['id'];
     }

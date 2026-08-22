@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Domain\Instagram\Payload\InstagramContainerPayload;
 use App\Models\InstagramAccount;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Request;
@@ -74,6 +75,19 @@ class InstagramPublishingService
         $response = $this->http()->post("https://{$this->host}/{$this->apiVersion}/{$igUserId}/media", $data);
 
         return $response->throw()->json();
+    }
+
+    /**
+     * Domain DTO'sundan gelen typed container payload'ını gönderir.
+     *
+     * Bu servis medya tipi / URL mantığını bilmez; yalnızca domain'in
+     * ürettiği payload'ı Meta Graph API'ye iletir.
+     *
+     * @return array<string, mixed>
+     */
+    public function createMediaContainerPayload(string $igUserId, InstagramContainerPayload $payload): array
+    {
+        return $this->createMediaContainer($igUserId, $payload->toPayload());
     }
 
     /**
