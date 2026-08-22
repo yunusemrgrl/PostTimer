@@ -349,7 +349,8 @@ class PublishInstagramPostService
             'alt_text' => $post->alt_text !== null ? ['text' => $post->alt_text] : null,
             'media_type' => $metaMediaType,
             'story_link' => $post->isStory() ? $post->story_link : null,
-            $post->isVideo() ? 'video_url' : 'image_url' => $post->media_url,
+            'video_url' => $post->isVideo() ? $post->media_url : null,
+            'image_url' => $post->isVideo() ? null : $post->media_url,
         ], fn ($value) => $value !== null));
 
         return (string) $container['id'];
