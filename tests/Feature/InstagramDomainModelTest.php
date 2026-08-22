@@ -201,18 +201,43 @@ it('supportedInsightMetrics returns correct metrics for each product type', func
         'media_product_type' => InstagramPost::PRODUCT_TYPE_FEED,
     ]);
     expect($feed->supportedInsightMetrics())
-        ->toContain('impressions', 'reach', 'likes', 'comments', 'saved', 'shares')
-        ->not->toContain('views', 'ig_reels_video_view_total_time');
+        ->toContain('reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions', 'views')
+        // impressions, 2 Temmuz 2024 sonrası medya için deprecated (Meta v25.0)
+        ->not->toContain('impressions', 'ig_reels_video_view_total_time');
 
     $reels = InstagramPost::factory()->reels()->create();
     expect($reels->supportedInsightMetrics())
-        ->toContain('views', 'ig_reels_video_view_total_time', 'ig_reels_avg_watch_time');
+        ->toContain('views', 'ig_reels_video_view_total_time', 'ig_reels_avg_watch_time')
+        ->not->toContain('impressions');
 
     $story = InstagramPost::factory()->story()->create();
     expect($story->supportedInsightMetrics())
-        ->toContain('replies', 'navigation', 'follows', 'profile_visits')
-        ->not->toContain('impressions', 'reach');
+        ->toContain('replies', 'navigation', 'follows', 'profile_visits', 'profile_activity')
+        ->not->toContain('impressions', 'likes', 'comments', 'saved');
 
     $carousel = InstagramPost::factory()->carousel()->create();
     expect($carousel->supportedInsightMetrics())->toBe([]);
+});
+
+it('supportedInsightMetrics falls back to story metrics when media_product_type is null and media_type is STORIES', function () {
+    $post = InstagramPost::factory()->published()->create([
+        'media_type' => InstagramPost::MEDIA_TYPE_STORIES,
+        'media_product_type' => null,
+        'media_id' => 'story_media_1',
+    ]);
+
+    expect($post->supportedInsightMetrics())
+        ->toContain('replies', 'navigation', 'follows', 'profile_visits', 'profile_activity')
+        ->not->toContain('impressions', 'likes', 'comments', 'saved');
+});
+
+it('supportedInsightMetrics falls back to feed metrics for image posts without media_product_type', function () {
+    $post = InstagramPost::factory()->published()->create([
+        'media_type' => InstagramPost::MEDIA_TYPE_IMAGE,
+        'media_product_type' => null,
+    ]);
+
+    expect($post->supportedInsightMetrics())
+        ->toContain('reach', 'likes', 'comments', 'saved')
+        ->not->toContain('impressions');
 });

@@ -19,6 +19,21 @@ final class ReelMedia extends AbstractInstagramMedia
         return InstagramMediaType::Reels;
     }
 
+    public function supportedInsightMetrics(): array
+    {
+        return [
+            'reach',
+            'likes',
+            'comments',
+            'saved',
+            'shares',
+            'total_interactions',
+            'views',
+            'ig_reels_video_view_total_time',
+            'ig_reels_avg_watch_time',
+        ];
+    }
+
     public function buildContainerPayload(array $childContainerIds = []): InstagramContainerPayload
     {
         $common = $this->commonFields();

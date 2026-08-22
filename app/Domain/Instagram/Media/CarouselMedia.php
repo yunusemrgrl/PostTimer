@@ -21,6 +21,17 @@ final class CarouselMedia extends AbstractInstagramMedia
     }
 
     /**
+     * Carousel album medyaları için insights desteklenmez (Meta:
+     * "Insights data is not available for any media within an album").
+     *
+     * @return array<int, string>
+     */
+    public function supportedInsightMetrics(): array
+    {
+        return [];
+    }
+
+    /**
      * Karusel çocuklarını normalleştirilmiş value object'ler olarak döner.
      *
      * @return array<int, CarouselChild>

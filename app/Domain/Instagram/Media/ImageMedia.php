@@ -14,6 +14,11 @@ final class ImageMedia extends AbstractInstagramMedia
         return InstagramMediaType::Image;
     }
 
+    public function supportedInsightMetrics(): array
+    {
+        return self::FEED_INSIGHT_METRICS;
+    }
+
     public function buildContainerPayload(array $childContainerIds = []): InstagramContainerPayload
     {
         $common = $this->commonFields();

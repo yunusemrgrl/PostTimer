@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Instagram\InstagramMediaFactory;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -310,53 +311,18 @@ class InstagramPost extends Model
     }
 
     /**
-     * Bu post için Meta Insights endpoint'inden çekilebilecek metric listesini
-     * media_product_type'a göre döndürür. CAROUSEL_ALBUM için boş dizi
-     * (Meta carousel medya insights'larını desteklemiyor).
+     * Bu post için Meta Insights endpoint'inden çekilebilecek metric
+     * listesini döndürür. Media tipi/metric eşlemesi domain'de
+     * (InstagramMedia hiyerarşisi) yapılır; burada yalnızca ilgili
+     * InstagramMedia instance'ına delege edilir.
      *
      * @return array<int, string>
      */
     public function supportedInsightMetrics(): array
     {
-        if ($this->isCarousel()) {
-            return [];
-        }
-
-        $product = $this->media_product_type
-            ?? ($this->isReels() ? self::PRODUCT_TYPE_REELS : null);
-
-        return match ($product) {
-            self::PRODUCT_TYPE_REELS => [
-                'reach',
-                'likes',
-                'comments',
-                'saved',
-                'shares',
-                'total_interactions',
-                'views',
-                'ig_reels_video_view_total_time',
-                'ig_reels_avg_watch_time',
-            ],
-
-            self::PRODUCT_TYPE_STORY => [
-                'replies',
-                'navigation',
-                'follows',
-                'profile_visits',
-                'profile_activity',
-            ],
-
-            default => [
-                'impressions',
-                'reach',
-                'likes',
-                'comments',
-                'saved',
-                'shares',
-                'total_interactions',
-                'views',
-            ],
-        };
+        return InstagramMediaFactory::instance()
+            ->make($this)
+            ->supportedInsightMetrics();
     }
 
     protected function casts(): array

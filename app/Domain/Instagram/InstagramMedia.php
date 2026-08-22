@@ -26,6 +26,15 @@ interface InstagramMedia
     public function isCarousel(): bool;
 
     /**
+     * Bu medya tipi için Meta Insights endpoint'inden çekilebilecek
+     * metric listesi. Carousel album gibi insights desteklenmeyen
+     * türler boş dizi döndürür.
+     *
+     * @return array<int, string>
+     */
+    public function supportedInsightMetrics(): array;
+
+    /**
      * Meta container oluşturma için tip-güvenli payload üretir.
      *
      * @param  array<int, string>  $childContainerIds  Yalnızca karusel için

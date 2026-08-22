@@ -11,6 +11,26 @@ use App\Models\InstagramPost;
  */
 abstract class AbstractInstagramMedia implements InstagramMedia
 {
+    /**
+     * FEED (IMAGE/VIDEO) postları için desteklenen insight metric'leri.
+     * 'impressions', 2 Temmuz 2024 sonrası oluşturulan medya için
+     * deprecated olduğundan istenmez.
+     *
+     * @var array<int, string>
+     */
+    protected const FEED_INSIGHT_METRICS = [
+        'reach',
+        'likes',
+        'comments',
+        'saved',
+        'shares',
+        'total_interactions',
+        'views',
+        'follows',
+        'profile_visits',
+        'profile_activity',
+    ];
+
     protected readonly InstagramPost $post;
 
     public function __construct(InstagramPost $post)

@@ -176,3 +176,68 @@ it('throws when building a carousel payload without children ids', function () {
         'media_type' => InstagramPost::MEDIA_TYPE_CAROUSEL_ALBUM,
     ]))->buildContainerPayload();
 })->throws(RuntimeException::class);
+
+it('ImageMedia returns the FEED insight metric list', function () {
+    $media = (new InstagramMediaFactory)->make(domainPost([
+        'media_type' => InstagramPost::MEDIA_TYPE_IMAGE,
+        'media_product_type' => InstagramPost::PRODUCT_TYPE_FEED,
+    ]));
+
+    expect($media->supportedInsightMetrics())
+        ->toBe([
+            'reach',
+            'likes',
+            'comments',
+            'saved',
+            'shares',
+            'total_interactions',
+            'views',
+            'follows',
+            'profile_visits',
+            'profile_activity',
+        ]);
+});
+
+it('VideoMedia returns the FEED insight metric list', function () {
+    $media = (new InstagramMediaFactory)->make(domainPost([
+        'media_type' => InstagramPost::MEDIA_TYPE_VIDEO,
+        'media_product_type' => InstagramPost::PRODUCT_TYPE_FEED,
+        'media_url' => 'https://example.com/media/video.mp4',
+    ]));
+
+    expect($media->supportedInsightMetrics())
+        ->toContain('reach', 'likes', 'comments', 'saved', 'views')
+        ->not->toContain('impressions', 'ig_reels_avg_watch_time');
+});
+
+it('ReelMedia returns the REELS insight metric list', function () {
+    $media = (new InstagramMediaFactory)->make(domainPost([
+        'media_type' => InstagramPost::MEDIA_TYPE_VIDEO,
+        'media_product_type' => InstagramPost::PRODUCT_TYPE_REELS,
+        'media_url' => 'https://example.com/media/reel.mp4',
+    ]));
+
+    expect($media->supportedInsightMetrics())
+        ->toContain('reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions', 'views', 'ig_reels_video_view_total_time', 'ig_reels_avg_watch_time')
+        ->not->toContain('impressions', 'replies', 'navigation');
+});
+
+it('StoryMedia returns the STORY insight metric list without engagement metrics', function () {
+    $media = (new InstagramMediaFactory)->make(domainPost([
+        'media_type' => InstagramPost::MEDIA_TYPE_VIDEO,
+        'media_product_type' => InstagramPost::PRODUCT_TYPE_STORY,
+        'media_url' => 'https://example.com/media/story.mp4',
+    ]));
+
+    expect($media->supportedInsightMetrics())
+        ->toContain('replies', 'navigation', 'follows', 'profile_visits', 'profile_activity', 'reach', 'views', 'shares', 'total_interactions')
+        ->not->toContain('impressions', 'likes', 'comments', 'saved');
+});
+
+it('CarouselMedia does not support media insights', function () {
+    $media = (new InstagramMediaFactory)->make(domainPost([
+        'media_type' => InstagramPost::MEDIA_TYPE_CAROUSEL_ALBUM,
+    ]));
+
+    expect($media->supportedInsightMetrics())->toBe([]);
+});
