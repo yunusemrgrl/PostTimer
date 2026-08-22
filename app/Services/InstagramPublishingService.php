@@ -3,8 +3,8 @@
 namespace App\Services;
 
 use App\Models\InstagramAccount;
-use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -334,7 +334,7 @@ class InstagramPublishingService
             ->connectTimeout($this->connectTimeout)
             ->beforeSending(function (Request $request) {
                 Log::info(
-                    'INSTAGRAM_REQUEST ' . json_encode([
+                    'INSTAGRAM_REQUEST '.json_encode([
                         'method' => $request->method(),
                         'url' => $this->sanitizeUrl($request->url()),
                         'body' => $this->sanitizeBody($request->body()),
@@ -343,7 +343,7 @@ class InstagramPublishingService
             })
             ->withResponseMiddleware(function ($response) {
                 Log::info(
-                    'INSTAGRAM_RESPONSE ' . json_encode([
+                    'INSTAGRAM_RESPONSE '.json_encode([
                         'status' => $response->getStatusCode(),
                         'body' => (string) $response->getBody(),
                     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
@@ -352,7 +352,6 @@ class InstagramPublishingService
                 return $response;
             });
     }
-
 
     protected function sanitizeUrl(string $url): string
     {
@@ -368,21 +367,21 @@ class InstagramPublishingService
             parse_str($parts['query'], $query);
 
             foreach ([
-                         'access_token',
-                         'client_secret',
-                         'token',
-                         'secret',
-                     ] as $key) {
+                'access_token',
+                'client_secret',
+                'token',
+                'secret',
+            ] as $key) {
                 unset($query[$key]);
             }
         }
 
-        $result = ($parts['scheme'] ?? 'https') . '://';
+        $result = ($parts['scheme'] ?? 'https').'://';
         $result .= $parts['host'] ?? '';
         $result .= $parts['path'] ?? '';
 
         if ($query !== []) {
-            $result .= '?' . http_build_query($query);
+            $result .= '?'.http_build_query($query);
         }
 
         return $result;
@@ -401,13 +400,13 @@ class InstagramPublishingService
         }
 
         foreach ([
-                     'access_token',
-                     'client_secret',
-                     'token',
-                     'secret',
-                     'Authorization',
-                     'authorization',
-                 ] as $key) {
+            'access_token',
+            'client_secret',
+            'token',
+            'secret',
+            'Authorization',
+            'authorization',
+        ] as $key) {
             if (array_key_exists($key, $json)) {
                 $json[$key] = '[REDACTED]';
             }

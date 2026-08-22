@@ -22,6 +22,6 @@ class TestQueueJob implements ShouldQueue
      */
     public function handle(): void
     {
-        logger('Managed queue test OK - ' . now());
+        logger('Managed queue test OK - '.now());
     }
 }

@@ -4,11 +4,6 @@ use App\Http\Controllers\InstagramConnectController;
 use App\Http\Controllers\MediaThumbnailController;
 use App\Http\Controllers\TelegramWebhookController;
 use Illuminate\Support\Facades\Route;
-use App\Models\InstagramPost;
-
-Route::get('/', function () {
-    return view('welcome');
-});
 
 Route::get('/privacy-policy', fn () => view('privacy-policy'))->name('privacy-policy');
 Route::get('/data-deletion', fn () => view('data-deletion'))->name('data-deletion');
@@ -29,13 +24,3 @@ Route::get('/media/{media:name}/thumbnail', [MediaThumbnailController::class, 's
 
 Route::get('/media/{media:name}/video', [MediaThumbnailController::class, 'video'])
     ->name('media.video');
-
-Route::get('/debug/instagram-story', function () {
-    $count = InstagramPost::query()
-        ->where('media_product_type', InstagramPost::PRODUCT_TYPE_STORY)
-        ->count();
-
-    return response()->json([
-        'story_count' => $count,
-    ]);
-});

@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\PublishScheduledPost;
 use App\Models\InstagramAccount;
 use App\Models\InstagramPost;
 use App\Models\Product;
@@ -7,7 +8,6 @@ use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\TelegramSetting;
 use App\Models\User;
-use App\Jobs\PublishScheduledPost;
 use App\Services\TelegramBotService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
