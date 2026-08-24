@@ -9,6 +9,26 @@ use Symfony\Component\Process\Process;
 
 class MediaObserver
 {
+    /**
+     * Uzantı → beklenen gerçek MIME (magic byte). Yalnızca Instagram'a
+     * gönderilebilecek medya tipleri kapsanır; listede olmayan uzantılar
+     * doğrulanmadan geçer.
+     *
+     * @var array<string, string>
+     */
+    private const EXPECTED_MIME_BY_EXT = [
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        'gif' => 'image/gif',
+        'webp' => 'image/webp',
+        'mp4' => 'video/mp4',
+        'mov' => 'video/quicktime',
+        'webm' => 'video/webm',
+    ];
+
+    private const SNIFF_BYTES = 8192;
+
     public function created(Media $media): void
     {
         Log::info('APP MEDIA OBSERVER ÇALIŞTI', [
@@ -16,6 +36,13 @@ class MediaObserver
             'ext' => $media->ext,
             'path' => $media->path,
         ]);
+
+        // Magic-byte doğrulaması: dosyanın içeriği, iddia edilen tipiyle
+        // uyuşmuyorsa kayıt ve dosya silinir (Content-Type header'ına
+        // güvenilmez — CDN yanlış yapılandırması / spoofing).
+        if ($this->rejectIfMagicBytesMismatch($media)) {
+            return;
+        }
 
         // Sadece videolar için thumbnail üret.
         if (! curator()->isVideo($media->ext)) {
@@ -30,6 +57,53 @@ class MediaObserver
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Dosyanın ilk baytlarından gerçek MIME'i sniffer; uzantının beklettiği
+     * tiple uyuşmuyorsa dosyayı ve kaydı silip true döner. Diskte fiziksel
+     * dosya yoksa (test fabrikaları, harici oluşturulan kayıtlar) kontrol
+     * atlanır.
+     */
+    private function rejectIfMagicBytesMismatch(Media $media): bool
+    {
+        $expected = self::EXPECTED_MIME_BY_EXT[strtolower($media->ext ?? '')] ?? null;
+
+        if ($expected === null) {
+            return false;
+        }
+
+        $stream = Storage::disk($media->disk)->readStream($media->path);
+
+        if (! is_resource($stream)) {
+            return false;
+        }
+
+        $head = (string) stream_get_contents($stream, self::SNIFF_BYTES);
+        fclose($stream);
+
+        if ($head === '') {
+            return false;
+        }
+
+        $detected = (new \finfo(FILEINFO_MIME_TYPE))->buffer($head);
+
+        if ($detected === $expected) {
+            return false;
+        }
+
+        Log::error('MEDYA MAGIC BYTE DOĞRULAMASI BAŞARISIZ — silindi', [
+            'media_id' => $media->id,
+            'ext' => $media->ext,
+            'expected_mime' => $expected,
+            'detected_mime' => $detected,
+            'path' => $media->path,
+        ]);
+
+        Storage::disk($media->disk)->delete($media->path);
+        $media->deleteQuietly();
+
+        return true;
     }
 
     private function generateVideoThumbnail(Media $media): void

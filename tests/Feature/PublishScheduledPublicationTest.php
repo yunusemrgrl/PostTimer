@@ -89,7 +89,7 @@ it('keeps retryable error state and lets the queue retry', function () {
         ->error_message->toBe('Instagram 24 saatlik API yayın limiti doldu.');
 
     expect($job->tries)->toBe(3)
-        ->and($job->backoff)->toBe(60);
+        ->and($job->backoff())->toBe([30, 120, 300]);
 });
 
 it('marks the publication as permanently failed when all retries are exhausted', function () {
@@ -155,13 +155,17 @@ it('skips flagged publications', function () {
     expect($publication->fresh())->status->toBe(Publication::STATUS_FLAGGED);
 });
 
-it('mirrors the legacy post job configuration', function () {
+it('mirrors the legacy post job configuration where intentional', function () {
     $legacy = new PublishScheduledPost(InstagramPost::factory()->create());
     $publication = Publication::factory()->create();
     $job = new PublishScheduledPublication($publication);
 
+    // tries ve timeout legacy job ile aynıdır; retry aralıkları artık
+    // exponential (30sn → 2dk → 5dk) olduğundan ve uniqueFor yeni toplam
+    // süreyi (≈15 dk) kapsayacak şekilde büyütüldüğünden bilinçli olarak
+    // sapar.
     expect($job->tries)->toBe($legacy->tries)
-        ->and($job->backoff)->toBe($legacy->backoff)
         ->and($job->timeout)->toBe($legacy->timeout)
-        ->and($job->uniqueFor)->toBe($legacy->uniqueFor);
+        ->and($job->backoff())->toBe([30, 120, 300])
+        ->and($job->uniqueFor)->toBe(900);
 });

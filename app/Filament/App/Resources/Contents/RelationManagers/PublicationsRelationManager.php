@@ -63,6 +63,14 @@ class PublicationsRelationManager extends RelationManager
                     ->placeholder('—')
                     ->toggleable(),
 
+                TextColumn::make('error_category')
+                    ->label('Hata Türü')
+                    ->badge()
+                    ->state(fn (Publication $record): string => Publication::errorCategories()[$record->errorCategory()])
+                    ->color(fn (Publication $record): string => Publication::errorCategoryColor($record->errorCategory()))
+                    ->visible(fn (?Publication $record): bool => filled($record?->error_message))
+                    ->toggleable(),
+
                 TextColumn::make('error_message')
                     ->label('Hata')
                     ->limit(50)

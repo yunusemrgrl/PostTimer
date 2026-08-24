@@ -21,7 +21,7 @@ use Throwable;
  * - ShouldBeUnique + uniqueId() → aynı yayın için iki job kuyrukta olamaz
  * - handle() başında durum koruması: cancelled/published/flagged yayınlara dokunulmaz
  * - Service katmanında atomic claim + container resume + media_id guard
- * - tries=3, backoff=60 → aşamalı retry
+ * - tries=3, backoff [30,120,300] → aşamalı retry
  *
  * NOT: Bu adımda event dispatch YOKTUR — publication event'leri Faz A4'te
  * tasarlanacak (mevcut Post* event'leri InstagramPost tiplidir).
@@ -35,18 +35,26 @@ class PublishScheduledPublication implements ShouldBeUnique, ShouldQueue
 
     public int $tries = 3;
 
-    public int $backoff = 60;
+    /**
+     * Aşamalı (exponential) retry: 30 sn → 2 dk → 5 dk. Kota dolması gibi
+     * uzun süreli koşullarda ilk iki hızlı deneme boşa harcanmaz.
+     */
+    public function backoff(): array
+    {
+        return [30, 120, 300];
+    }
 
     public int $timeout = 85;
 
     /**
      * ShouldBeUnique kilidinin ne kadar süre tutulacağı. Job'un en kötü
-     * ihtimalle tamamlanma süresi: timeout + (tries-1) * backoff + pay.
-     * Bu olmadan varsayılan davranış, kilidi job tamamlanana/failed()
-     * tetiklenene kadar süresiz tutar — worker temiz ölürse kilit
-     * takılı kalabilir ve yayın bir daha hiç dispatch edilemez.
+     * ihtimalle tamamlanma süresi: (tries × timeout) + sum(backoff) + pay
+     * = (3 × 85) + 450 + pay ≈ 15 dk. Bu olmadan varsayılan davranış,
+     * kilidi job tamamlanana/failed() tetiklenene kadar süresiz tutar —
+     * worker temiz ölürse kilit takılı kalabilir ve yayın bir daha hiç
+     * dispatch edilemez.
      */
-    public int $uniqueFor = 600;
+    public int $uniqueFor = 900;
 
     public function __construct(
         public Publication $publication,

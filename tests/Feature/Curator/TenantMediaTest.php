@@ -113,7 +113,8 @@ it('exposes the url accessor and required columns on a stored media record', fun
     $team = Team::factory()->create();
     $path = 'tenants/'.hash_hmac('sha256', (string) $team->getKey(), 'test-secret-key').'/media/2026/08/file.png';
 
-    Storage::disk('public')->put($path, 'contents');
+    // Geçerli PNG baytları — magic-byte doğrulaması kaydı silmesin diye.
+    Storage::disk('public')->put($path, "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89");
 
     $media = Media::factory()->for($team)->create([
         'disk' => 'public',

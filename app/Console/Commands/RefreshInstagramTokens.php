@@ -29,18 +29,19 @@ class RefreshInstagramTokens extends Command
 
         $refreshed = 0;
         $failed = 0;
+        $skipped = 0;
 
         foreach ($expiringAccounts as $account) {
             try {
-                $result = $oauth->refreshLongLivedToken($account->access_token);
+                $result = $oauth->refreshAccountToken($account);
 
-                $account->forceFill([
-                    'access_token' => $result['access_token'],
-                    'token_expires_at' => $result['expires_in'] > 0
-                        ? now()->addSeconds($result['expires_in'])
-                        : null,
-                    'token_expiry_notified_at' => null,
-                ])->save();
+                if ($result === null) {
+                    // Başka bir süreç zaten yeniliyor — taze jetonu o yazacak.
+                    $skipped++;
+                    $this->line("Atlandı (kilitli, başka süreç yeniliyor): [#{$account->id}] @{$account->username}");
+
+                    continue;
+                }
 
                 $refreshed++;
                 $this->info("Yenilendi: [#{$account->id}] @{$account->username}");
@@ -52,6 +53,7 @@ class RefreshInstagramTokens extends Command
 
         $this->table(['Durum', 'Adet'], [
             ['Yenilendi', $refreshed],
+            ['Kilitli (atlandı)', $skipped],
             ['Başarısız', $failed],
         ]);
 

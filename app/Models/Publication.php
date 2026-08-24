@@ -33,6 +33,64 @@ class Publication extends Model
     public const STATUS_CANCELLED = 'cancelled';
 
     /**
+     * Hata kategorileri — kalıcı kolon YERİNE error_message'ten türetilir
+     * (şema değişikliği gerektirmeden kullanıcı-dostu sınıflandırma).
+     * TryPost'un 13-değerli ErrorCategory enum'unun tek-platform
+     * sadeleştirmesidir.
+     */
+    public const ERROR_CATEGORY_QUOTA = 'quota';
+
+    public const ERROR_CATEGORY_TIMEOUT = 'timeout';
+
+    public const ERROR_CATEGORY_TOKEN = 'token_expired';
+
+    public const ERROR_CATEGORY_API = 'api_error';
+
+    public const ERROR_CATEGORY_UNKNOWN = 'unknown';
+
+    /**
+     * @return array<string, string>
+     */
+    public static function errorCategories(): array
+    {
+        return [
+            self::ERROR_CATEGORY_QUOTA => 'Kota doldu',
+            self::ERROR_CATEGORY_TIMEOUT => 'Zaman aşımı',
+            self::ERROR_CATEGORY_TOKEN => 'Bağlantı/jeton sorunu',
+            self::ERROR_CATEGORY_API => 'API hatası',
+            self::ERROR_CATEGORY_UNKNOWN => 'Bilinmeyen hata',
+        ];
+    }
+
+    public static function errorCategoryColor(string $category): string
+    {
+        return match ($category) {
+            self::ERROR_CATEGORY_QUOTA, self::ERROR_CATEGORY_TOKEN => 'warning',
+            self::ERROR_CATEGORY_TIMEOUT, self::ERROR_CATEGORY_API => 'danger',
+            default => 'gray',
+        };
+    }
+
+    /**
+     * Hata mesajından kategori türetir. Sıra önemlidir: en spesifik
+     * desen önce eşleşir.
+     */
+    public function errorCategory(): string
+    {
+        $message = mb_strtolower((string) $this->error_message);
+
+        return match (true) {
+            $message === '' => self::ERROR_CATEGORY_UNKNOWN,
+            str_contains($message, 'publishing_timed_out') => self::ERROR_CATEGORY_TIMEOUT,
+            str_contains($message, 'limiti doldu') => self::ERROR_CATEGORY_QUOTA,
+            str_contains($message, 'erişilemedi')
+                || str_contains($message, 'jeton')
+                || str_contains($message, 'token') => self::ERROR_CATEGORY_TOKEN,
+            default => self::ERROR_CATEGORY_API,
+        };
+    }
+
+    /**
      * @var array<int, string>
      */
     protected $fillable = [
@@ -45,6 +103,7 @@ class Publication extends Model
         'published_at',
         'ig_media_timestamp',
         'container_id',
+        'carousel_child_container_ids',
         'media_id',
         'permalink',
         'error_message',
@@ -76,6 +135,7 @@ class Publication extends Model
             'published_at' => 'datetime',
             'ig_media_timestamp' => 'datetime',
             'last_publish_attempt_at' => 'datetime',
+            'carousel_child_container_ids' => 'array',
         ];
     }
 

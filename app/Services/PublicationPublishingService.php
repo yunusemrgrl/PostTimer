@@ -169,7 +169,7 @@ class PublicationPublishingService
 
         // Pattern 3: Container Resume
         $containerResumed = $publication->container_id !== null;
-        $containerId = $publication->container_id ?: $this->createContainer($source, $instagram, $publication->ig_user_id);
+        $containerId = $publication->container_id ?: $this->createContainer($source, $instagram, $publication->ig_user_id, $publication);
 
         // container_id hemen persist edilir; retry aynı container'ı yeniden kullanır.
         if (! $containerResumed) {
@@ -208,6 +208,7 @@ class PublicationPublishingService
 
         $publication->forceFill([
             'container_id' => $containerId,
+            'carousel_child_container_ids' => null,
             'media_id' => $mediaId,
             'permalink' => $permalink,
             'ig_media_timestamp' => $igTimestamp,
@@ -325,13 +326,13 @@ class PublicationPublishingService
      * Medya türüne göre tekli veya karusel konteyner oluşturur ve
      * konteyner ID'sini döner.
      */
-    protected function createContainer(HasPublishableMedia $source, InstagramPublishingService $instagram, string $igUserId): string
+    protected function createContainer(HasPublishableMedia $source, InstagramPublishingService $instagram, string $igUserId, Publication $publication): string
     {
         $media = InstagramMediaFactory::instance()->make($source);
 
         // Carousel ayrı akış: önce item container'ları, sonra karusel container'ı.
         if ($media instanceof CarouselMedia) {
-            return $this->createCarouselContainer($media, $instagram, $igUserId);
+            return $this->createCarouselContainer($media, $instagram, $igUserId, $publication);
         }
 
         $container = $instagram->createMediaContainerPayload(
@@ -342,7 +343,7 @@ class PublicationPublishingService
         return (string) $container['id'];
     }
 
-    protected function createCarouselContainer(CarouselMedia $media, InstagramPublishingService $instagram, string $igUserId): string
+    protected function createCarouselContainer(CarouselMedia $media, InstagramPublishingService $instagram, string $igUserId, Publication $publication): string
     {
         $children = $media->childUrls();
         $count = count($children);
@@ -351,14 +352,33 @@ class PublicationPublishingService
             throw new RuntimeException('Karusel gönderileri 2 ile 10 medya içermelidir.');
         }
 
-        $childIds = array_map(
-            fn (CarouselChild $child): string => $this->createCarouselItemContainer(
+        // Carousel checkpoint (TryPost PublishCheckpoint deseninin kolon-tabanlı
+        // uyarlanışı): her çocuk container oluşturulduğunda kalıcı olarak
+        // kaydedilir. Queue retry'ında tamamlanan çocuklar yeniden oluşturulmaz.
+        $checkpoint = array_values($publication->carousel_child_container_ids ?? []);
+
+        $childIds = [];
+
+        foreach ($children as $index => $child) {
+            if (isset($checkpoint[$index])) {
+                $childIds[] = $checkpoint[$index];
+
+                continue;
+            }
+
+            $childId = $this->createCarouselItemContainer(
                 $child,
                 $instagram,
                 $igUserId,
-            ),
-            $children,
-        );
+            );
+
+            // İlerleme anında persist edilir — bir sonraki çocukta çökme olsa
+            // bile bu container retry'ta yeniden kullanılır.
+            $checkpoint[$index] = $childId;
+            $publication->forceFill(['carousel_child_container_ids' => array_values($checkpoint)])->save();
+
+            $childIds[] = $childId;
+        }
 
         $carousel = $instagram->createCarouselContainer(
             $igUserId,

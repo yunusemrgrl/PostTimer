@@ -35,6 +35,23 @@ Schedule::command('publications:publish-scheduled')
     ->withoutOverlapping();
 
 /*
+ * Yaklaşan yayınların hesap sağlığını proaktif doğrular: önümüzdeki 1 saatte
+ * yayını olan token'lar ucuz Graph çağrısıyla kontrol edilir; ölüler flagged
+ * + Telegram uyarısı alır (hesap başına 60 dk cooldown).
+ */
+Schedule::command('publications:check-connections')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping();
+
+/*
+ * Worker çökmesinden sonra "publishing" durumunda takılı kalan yayınları
+ * 1 saat sonra FAILED moduna çeker.
+ */
+Schedule::command('publications:recover-stuck')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping();
+
+/*
  * Just-In-Time stok kontrolünü Publication karşılığı — mevcut
  * Instagram stok kontrolüyle aynı sıklıkta çalışır.
  */

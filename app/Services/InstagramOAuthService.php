@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\InstagramAccount;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -17,6 +19,15 @@ use RuntimeException;
  */
 class InstagramOAuthService
 {
+    /**
+     * Hesap-bazlı refresh kilidi (saniye). Client timeout'u (instagram.timeout,
+     * 30 sn) artı connect süresinden belirgin biçimde uzun olmalı: refresh
+     * isteği platformca işlendikten sonra bizde zaman aşımı oluşursa yeni
+     * jeton kaybedilir. ConnectionVerifier::REFRESH_LOCK_SECONDS deseninin
+     * uyarlanışıdır; tek platform olduğundan sabit yeterlidir.
+     */
+    public const REFRESH_LOCK_SECONDS = 120;
+
     protected string $authorizeUrl = 'https://www.instagram.com/oauth/authorize';
 
     protected string $shortLivedTokenUrl = 'https://api.instagram.com/oauth/access_token';
@@ -124,6 +135,51 @@ class InstagramOAuthService
             'access_token' => (string) $data['access_token'],
             'expires_in' => (int) ($data['expires_in'] ?? 0),
         ];
+    }
+
+    /**
+     * Hesabın jetonunu eşzamanlılık korumalı yeniler (ConnectionVerifier
+     * deseninin uyarlanışı): refresh çevresi Cache::lock ile sarılır, böylece
+     * iki süreç aynı anda refresh isteği atıp jetonu düşüremez.
+     *
+     * Kilit süresi, client timeout'unun izin verdiğinden belirgin biçimde
+     * uzundur — refresh isteği platform tarafından işlendikten sonra bizim
+     * tarafımızda zaman aşımı olursa yeni token kaybedilir; kilidi kısa
+     * tutup yarış açmaktansa uzun tutmayı tercih ederiz.
+     *
+     * Kilit başka bir süreçteyse null döner: o süreç taze jetonu kalıcı
+     * hale getirecektir — çağıran taraf hesabı yeniden okumalıdır.
+     *
+     * @return array{access_token: string, expires_in: int}|null
+     */
+    public function refreshAccountToken(InstagramAccount $account): ?array
+    {
+        $lock = Cache::lock(self::refreshLockKey($account), self::REFRESH_LOCK_SECONDS);
+
+        if (! $lock->get()) {
+            return null;
+        }
+
+        try {
+            $result = $this->refreshLongLivedToken($account->access_token);
+
+            $account->forceFill([
+                'access_token' => $result['access_token'],
+                'token_expires_at' => $result['expires_in'] > 0
+                    ? now()->addSeconds($result['expires_in'])
+                    : null,
+                'token_expiry_notified_at' => null,
+            ])->save();
+
+            return $result;
+        } finally {
+            $lock->release();
+        }
+    }
+
+    public static function refreshLockKey(InstagramAccount $account): string
+    {
+        return "ig-token-refresh-{$account->id}";
     }
 
     protected function client(bool $asMultipart = false): PendingRequest
