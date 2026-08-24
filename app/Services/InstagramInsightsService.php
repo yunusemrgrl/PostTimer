@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Domain\Instagram\InstagramMediaFactory;
 use App\Models\InstagramAccount;
 use App\Models\InstagramPost;
 use App\Models\InstagramPostInsight;
+use App\Models\Publication;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -43,6 +45,100 @@ class InstagramInsightsService
         $client = $this->resolveClient($post);
 
         return $this->fetchAndPersist($post, $client, $metrics);
+    }
+
+    /**
+     * Faz B1 — Publication-side insights sync.
+     *
+     * Metric listesi Content üzerinden (HasPublishableMedia sözleşmesiyle)
+     * çözülür; hesap, publication'ın KENDİ InstagramAccount'ıdır ve yazım
+     * instagram_post_insights.publication_id kolonunadır. Eski post-side
+     * akış (syncPostInsights) bilinçli olarak korunmuştur.
+     *
+     * @return array<int, string> Kaydedilen metric isimleri
+     */
+    public function syncPublication(Publication $publication): array
+    {
+        if (! $publication->media_id) {
+            throw new RuntimeException('Yayın henüz yayınlanmamış (media_id yok).');
+        }
+
+        $metrics = InstagramMediaFactory::instance()
+            ->make($publication->content)
+            ->supportedInsightMetrics();
+
+        // Carousel medya insights desteklenmiyor.
+        if ($metrics === []) {
+            return [];
+        }
+
+        $account = $publication->instagramAccount;
+
+        if (! $account) {
+            throw new RuntimeException('Yayının bağlı olduğu Instagram hesabı bulunamadı.');
+        }
+
+        $client = InstagramPublishingService::forAccount($account);
+
+        try {
+            $response = $client->getMediaInsights($publication->media_id, $metrics);
+        } catch (RequestException $e) {
+            $status = $e->response?->status();
+
+            if ($status === 403) {
+                throw new RuntimeException(
+                    'Instagram insights permission eksik. Token\'da instagram_business_manage_insights scope\'u olmalı. '
+                    .'Mevcut token\'lar bu permission\'a sahip değil; hesabı yeniden bağlayın.',
+                    0,
+                    $e,
+                );
+            }
+
+            Log::warning('instagram.insights.publication_api_error', [
+                'publication_id' => $publication->id,
+                'media_id' => $publication->media_id,
+                'status' => $status,
+                'body' => $e->response?->body(),
+            ]);
+
+            return [];
+        }
+
+        return $this->persistPublicationInsights($publication, $response);
+    }
+
+    /**
+     * Insights response'unu publication_id ile snapshot olarak kaydeder.
+     *
+     * @param  array<string, mixed>  $response
+     * @return array<int, string> Kaydedilen metric isimleri
+     */
+    protected function persistPublicationInsights(Publication $publication, array $response): array
+    {
+        $saved = [];
+        $now = now();
+
+        foreach ($response['data'] ?? [] as $metric) {
+            $name = $metric['name'] ?? null;
+            $period = $metric['period'] ?? null;
+            $value = $this->extractMetricValue($metric);
+
+            if ($name === null || $value === null) {
+                continue;
+            }
+
+            InstagramPostInsight::create([
+                'publication_id' => $publication->id,
+                'metric' => $name,
+                'period' => $period,
+                'value' => $value,
+                'fetched_at' => $now,
+            ]);
+
+            $saved[] = $name;
+        }
+
+        return $saved;
     }
 
     /**

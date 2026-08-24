@@ -33,6 +33,7 @@ function publishResponseSequence(): void
         ->push(['id' => 'ig_container_1'])
         ->push(['status_code' => 'FINISHED'])
         ->push(['id' => 'ig_media_1'])
+        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1'])
         ->dontFailWhenEmpty();
 }
 
@@ -42,6 +43,7 @@ function publishResponseSequenceNoStatus(): void
         ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
         ->push(['id' => 'ig_container_1'])
         ->push(['id' => 'ig_media_1'])
+        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1'])
         ->dontFailWhenEmpty();
 }
 
@@ -131,6 +133,7 @@ it('sends CAROUSEL_ALBUM + FEED to Meta API as media_type=CAROUSEL', function ()
         ->push(['id' => 'ig_child_2'])
         ->push(['id' => 'ig_container_1'])
         ->push(['id' => 'ig_media_1'])
+        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1'])
         ->dontFailWhenEmpty();
 
     $post = InstagramPost::factory()->carousel()->create();

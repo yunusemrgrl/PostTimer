@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Bir takıma (tenant) bağlı Instagram profesyonel hesabı. Profil
@@ -67,5 +68,13 @@ class InstagramAccount extends Model
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * Bu hesapta yapılan yayın kayıtları.
+     */
+    public function publications(): HasMany
+    {
+        return $this->hasMany(Publication::class);
     }
 }

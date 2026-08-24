@@ -32,7 +32,8 @@ it('publishes a draft image post end to end', function () {
     Http::fakeSequence()
         ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
         ->push(['id' => 'ig_container_1'])
-        ->push(['id' => 'ig_media_1']);
+        ->push(['id' => 'ig_media_1'])
+        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1']);
 
     $post = InstagramPost::factory()->create([
         'ig_user_id' => '90010177253934',
@@ -80,7 +81,8 @@ it('does not re-publish an already published post (idempotency)', function () {
 it('resumes from existing container_id on retry (idempotency)', function () {
     Http::fakeSequence()
         ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
-        ->push(['id' => 'ig_media_1']);
+        ->push(['id' => 'ig_media_1'])
+        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1']);
 
     $post = InstagramPost::factory()->create([
         'status' => InstagramPost::STATUS_DRAFT,
@@ -138,6 +140,7 @@ it('re-publishes after a transient failure via retry reclaim', function () {
         ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
         ->push(['id' => 'ig_container_1'])
         ->push(['id' => 'ig_media_1'])
+        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1'])
         ->dontFailWhenEmpty();
 
     $post = InstagramPost::factory()->create();
@@ -238,7 +241,9 @@ it('sends VIDEO posts to the Meta API as REELS', function () {
         // 3. GET /{container_id} → isVideo() true olduğu için waitForContainerToFinish() poll
         ->push(['status_code' => 'FINISHED'])
         // 4. POST /media_publish → yayın
-        ->push(['id' => 'ig_media_1']);
+        ->push(['id' => 'ig_media_1'])
+        // 5. GET /{media_id} → yayın sonrası permalink/thumbnail fetch
+        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1']);
 
     // Uygulama DB'sinde media_type=VIDEO + media_product_type=REELS;
     // Meta API'ye media_type=REELS olarak gönderilir.

@@ -60,7 +60,8 @@ it('logs every publish flow stage with correlation context without changing beha
     Http::fakeSequence()
         ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
         ->push(['id' => 'ig_container_1'])
-        ->push(['id' => 'ig_media_1']);
+        ->push(['id' => 'ig_media_1'])
+        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1']);
 
     $post = InstagramPost::factory()->create([
         'caption' => 'Secret caption content',
@@ -175,7 +176,8 @@ it('warns when the media url is not publicly reachable', function () {
     Http::fakeSequence()
         ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
         ->push(['id' => 'ig_container_1'])
-        ->push(['id' => 'ig_media_1']);
+        ->push(['id' => 'ig_media_1'])
+        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1']);
 
     // http şeması + .test hostu: Instagram bunu asla erişemez
     $post = InstagramPost::factory()->create([
@@ -204,7 +206,8 @@ it('warns when the media url points at a storage api host instead of a public ho
     Http::fakeSequence()
         ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
         ->push(['id' => 'ig_container_1'])
-        ->push(['id' => 'ig_media_1']);
+        ->push(['id' => 'ig_media_1'])
+        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1']);
 
     // R2 API endpoint host'u: Instagram buradan public içerik çekemez;
     // disk config'indeki public url (R2_URL) kullanılmalıdır.
@@ -230,7 +233,8 @@ it('propagates the manual flow id from publishNow into the publish stages', func
     Http::fakeSequence()
         ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
         ->push(['id' => 'ig_container_1'])
-        ->push(['id' => 'ig_media_1']);
+        ->push(['id' => 'ig_media_1'])
+        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1']);
 
     $post = InstagramPost::factory()->create([
         'status' => InstagramPost::STATUS_SCHEDULED,

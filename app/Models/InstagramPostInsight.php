@@ -16,6 +16,7 @@ class InstagramPostInsight extends Model
 
     protected $fillable = [
         'instagram_post_id',
+        'publication_id',
         'metric',
         'period',
         'value',
@@ -36,5 +37,16 @@ class InstagramPostInsight extends Model
     public function post(): BelongsTo
     {
         return $this->belongsTo(InstagramPost::class);
+    }
+
+    /**
+     * Publication-side insights (Faz B1): publication_id doluysa snapshot
+     * yeni publish domain'inden gelmiştir.
+     *
+     * @return BelongsTo<Publication, $this>
+     */
+    public function publication(): BelongsTo
+    {
+        return $this->belongsTo(Publication::class);
     }
 }

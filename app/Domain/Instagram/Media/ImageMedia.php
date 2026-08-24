@@ -24,7 +24,7 @@ final class ImageMedia extends AbstractInstagramMedia
         $common = $this->commonFields();
 
         return new ImageContainerPayload(
-            imageUrl: (string) $this->post->media_url,
+            imageUrl: (string) $this->post->getMediaUrl(),
             caption: $common['caption'],
             altText: $common['alt_text'],
             isAiGenerated: $common['is_ai_generated'],

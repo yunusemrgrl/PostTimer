@@ -38,7 +38,7 @@ final class CarouselMedia extends AbstractInstagramMedia
      */
     public function childUrls(): array
     {
-        return collect($this->post->children ?? [])
+        return collect($this->post->getChildren() ?? [])
             ->filter()
             ->map(fn (mixed $child): CarouselChild => CarouselChild::from($child))
             ->values()

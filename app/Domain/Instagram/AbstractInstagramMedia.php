@@ -2,8 +2,6 @@
 
 namespace App\Domain\Instagram;
 
-use App\Models\InstagramPost;
-
 /**
  * Somut media türlerinin paylaştığı ortak alanları/model okumalarını
  * toplar. Alt sınıflar yalnızca tipine özgü davranışı (mediaType, bool
@@ -31,14 +29,14 @@ abstract class AbstractInstagramMedia implements InstagramMedia
         'profile_activity',
     ];
 
-    protected readonly InstagramPost $post;
+    protected readonly HasPublishableMedia $post;
 
-    public function __construct(InstagramPost $post)
+    public function __construct(HasPublishableMedia $post)
     {
         $this->post = $post;
     }
 
-    public function post(): InstagramPost
+    public function post(): HasPublishableMedia
     {
         return $this->post;
     }
@@ -59,17 +57,17 @@ abstract class AbstractInstagramMedia implements InstagramMedia
     }
 
     /**
-     * Container payload'larında ortak olan, modelden okunan alanlar.
+     * Container payload'larında ortak olan, kaynaktan okunan alanlar.
      *
      * @return array{caption: string|null, alt_text: string|null, is_ai_generated: bool|null, story_link: string|null}
      */
     protected function commonFields(): array
     {
         return [
-            'caption' => $this->post->caption,
-            'alt_text' => $this->post->alt_text,
-            'is_ai_generated' => $this->post->is_ai_generated,
-            'story_link' => $this->post->story_link,
+            'caption' => $this->post->getCaption(),
+            'alt_text' => $this->post->getAltText(),
+            'is_ai_generated' => $this->post->isAiGenerated(),
+            'story_link' => $this->post->getStoryLink(),
         ];
     }
 }

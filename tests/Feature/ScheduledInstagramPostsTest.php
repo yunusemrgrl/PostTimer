@@ -146,6 +146,10 @@ it('can publish a scheduled post immediately, skipping the queue', function () {
         ]),
         'https://graph.instagram.com/*/media' => Http::response(['id' => 'ig_container_1']),
         'https://graph.instagram.com/*/media_publish' => Http::response(['id' => 'ig_media_1']),
+        'https://graph.instagram.com/*ig_media_*' => Http::response([
+            'id' => 'ig_media_1',
+            'permalink' => 'https://instagram.com/p/ig_media_1',
+        ]),
         '*' => Http::response(),
     ]);
 

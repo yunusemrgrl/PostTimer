@@ -2,7 +2,7 @@
 
 namespace App\Filament\App\Widgets;
 
-use App\Models\InstagramPost;
+use App\Models\Publication;
 use Filament\Facades\Filament;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -25,23 +25,24 @@ class InstagramOverviewWidget extends StatsOverviewWidget
         $accountCount = (clone $accounts)->count();
         $followers = (clone $accounts)->sum('followers_count');
 
-        $posts = $team->instagramPosts();
-        $published = (clone $posts)
-            ->where('status', InstagramPost::STATUS_PUBLISHED)
+        $publications = Publication::query()
+            ->whereBelongsTo($team, 'team');
+        $published = (clone $publications)
+            ->where('status', Publication::STATUS_PUBLISHED)
             ->where('published_at', '>=', now()->subDays(30))
             ->count();
 
-        $scheduled = (clone $posts)
-            ->where('status', InstagramPost::STATUS_SCHEDULED)
+        $scheduled = (clone $publications)
+            ->where('status', Publication::STATUS_SCHEDULED)
             ->where('scheduled_at', '>', now())
             ->count();
 
-        $failed = (clone $posts)
-            ->where('status', InstagramPost::STATUS_FAILED)
+        $failed = (clone $publications)
+            ->where('status', Publication::STATUS_FAILED)
             ->count();
 
-        $flagged = (clone $posts)
-            ->where('status', InstagramPost::STATUS_FLAGGED)
+        $flagged = (clone $publications)
+            ->where('status', Publication::STATUS_FLAGGED)
             ->count();
 
         return [

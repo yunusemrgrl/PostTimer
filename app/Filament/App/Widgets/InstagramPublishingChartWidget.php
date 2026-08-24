@@ -2,7 +2,7 @@
 
 namespace App\Filament\App\Widgets;
 
-use App\Models\InstagramPost;
+use App\Models\Publication;
 use Filament\Facades\Filament;
 use Filament\Widgets\ChartWidget;
 
@@ -36,15 +36,15 @@ class InstagramPublishingChartWidget extends ChartWidget
 
         $days = collect(range(13, -1))->map(fn (int $daysAgo) => now()->subDays($daysAgo)->startOfDay());
 
-        $published = InstagramPost::query()
+        $published = Publication::query()
             ->whereBelongsTo($team, 'team')
-            ->where('status', InstagramPost::STATUS_PUBLISHED)
+            ->where('status', Publication::STATUS_PUBLISHED)
             ->whereBetween('published_at', [$days->first(), $days->last()->copy()->endOfDay()])
             ->get(['published_at']);
 
-        $scheduled = InstagramPost::query()
+        $scheduled = Publication::query()
             ->whereBelongsTo($team, 'team')
-            ->where('status', InstagramPost::STATUS_SCHEDULED)
+            ->where('status', Publication::STATUS_SCHEDULED)
             ->whereBetween('scheduled_at', [$days->first(), $days->last()->copy()->endOfDay()])
             ->get(['scheduled_at']);
 
@@ -54,7 +54,7 @@ class InstagramPublishingChartWidget extends ChartWidget
                     'label' => 'Yayınlanan',
                     'data' => $days
                         ->map(fn ($day) => $published
-                            ->filter(fn (InstagramPost $post) => $post->published_at?->isSameDay($day))
+                            ->filter(fn (Publication $p) => $p->published_at?->isSameDay($day))
                             ->count())
                         ->all(),
                     'borderColor' => '#4caf50',
@@ -64,7 +64,7 @@ class InstagramPublishingChartWidget extends ChartWidget
                     'label' => 'Planlanan',
                     'data' => $days
                         ->map(fn ($day) => $scheduled
-                            ->filter(fn (InstagramPost $post) => $post->scheduled_at?->isSameDay($day))
+                            ->filter(fn (Publication $p) => $p->scheduled_at?->isSameDay($day))
                             ->count())
                         ->all(),
                     'borderColor' => '#3f51b5',

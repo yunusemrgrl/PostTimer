@@ -59,8 +59,8 @@ final class StoryMedia extends AbstractInstagramMedia
         $isVideo = $this->post->isVideo();
 
         return new StoryContainerPayload(
-            videoUrl: $isVideo ? (string) $this->post->media_url : null,
-            imageUrl: $isVideo ? null : (string) $this->post->media_url,
+            videoUrl: $isVideo ? (string) $this->post->getMediaUrl() : null,
+            imageUrl: $isVideo ? null : (string) $this->post->getMediaUrl(),
             caption: $common['caption'],
             altText: $common['alt_text'],
             isAiGenerated: $common['is_ai_generated'],

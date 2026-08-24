@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Instagram\HasPublishableMedia;
 use App\Domain\Instagram\InstagramMediaFactory;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -9,7 +10,15 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class InstagramPost extends Model
+/**
+ * LEGACY — InstagramPost model'i. Bu domain pasif durumdadır; yeni akış
+ * Content + Publication'a taşındı. Eski 8 production `instagram_posts` kaydı
+ * hâlâ okunabilir durumdadur ancak yeni veri oluşturulmaz. Eski publish /
+ * scheduler / event akışları deprecated sayılır.
+ *
+ * @deprecated Content + Publication model'lerini kullanın.
+ */
+class InstagramPost extends Model implements HasPublishableMedia
 {
     use HasFactory;
 
@@ -370,5 +379,50 @@ class InstagramPost extends Model
     {
         return $this->media_product_type === self::PRODUCT_TYPE_STORY
             || $this->media_type === self::MEDIA_TYPE_STORIES;
+    }
+
+    // --- HasPublishableMedia sözleşmesi (additive; mevcut davranış korunur) ---
+
+    public function getMediaType(): string
+    {
+        return $this->media_type;
+    }
+
+    public function getMediaProductType(): ?string
+    {
+        return $this->media_product_type;
+    }
+
+    public function getCaption(): ?string
+    {
+        return $this->caption;
+    }
+
+    public function getAltText(): ?string
+    {
+        return $this->alt_text;
+    }
+
+    public function getMediaUrl(): ?string
+    {
+        return $this->media_url;
+    }
+
+    public function getStoryLink(): ?string
+    {
+        return $this->story_link;
+    }
+
+    /**
+     * @return array<int, mixed>|null
+     */
+    public function getChildren(): ?array
+    {
+        return $this->children;
+    }
+
+    public function isAiGenerated(): bool
+    {
+        return $this->is_ai_generated;
     }
 }

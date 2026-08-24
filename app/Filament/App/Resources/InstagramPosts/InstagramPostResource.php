@@ -21,9 +21,19 @@ use UnitEnum;
  * yeni kayıtlar otomatik olarak o hesaba bağlanır (Filament'in
  * "ownership relationship" mekanizması).
  */
+/**
+ * LEGACY — InstagramPost domain pasif durumdadır. Yeni akış Content →
+ * Publication'a taşıldı; bu resource navigasyondan gizlenilir (dosyalar
+ * ve modeli eski 8 production kaydın erişilebilirliği için kalmıyaz).
+ */
 class InstagramPostResource extends Resource
 {
     protected static ?string $model = InstagramPost::class;
+
+    /**
+     * Legacy Resource navigation'da artık gösterilmez.
+     */
+    protected static bool $shouldRegisterNavigation = false;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedPhoto;
 

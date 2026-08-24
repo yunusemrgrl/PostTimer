@@ -24,6 +24,13 @@ use Throwable;
  * 3. Container Resume — worker çökse sonra tekrar denense, container yeniden oluşturulmaz
  * 4. Cache Lock — aynı post için paralel worker engeli
  * 5. Event Dispatch — yayın sonrası aksiyonlar (ilk yorum, Telegram) event ile tetiklenir
+ *
+ * LEGACY — InstagramPost publish servisi. Bu domain pasif durumdadır;
+ * yeni akış Content → PublicationPublishingService → Publication'a taşındı.
+ * Eski instagram_posts verisi (8 production kaydı) erişilebilirliği için
+ * korunuyor.
+ *
+ * @deprecated PublicationPublishingService kullanın.
  */
 class PublishInstagramPostService
 {

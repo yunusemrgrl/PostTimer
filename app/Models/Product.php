@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Domain 1 — Link Vault: Kullanıcının affiliate linklerini ve ürün
@@ -59,5 +60,13 @@ class Product extends Model
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * Bu ürüne bağlı içerikler.
+     */
+    public function contents(): HasMany
+    {
+        return $this->hasMany(Content::class);
     }
 }

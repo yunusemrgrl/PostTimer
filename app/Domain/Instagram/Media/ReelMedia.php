@@ -39,7 +39,7 @@ final class ReelMedia extends AbstractInstagramMedia
         $common = $this->commonFields();
 
         return new ReelContainerPayload(
-            videoUrl: (string) $this->post->media_url,
+            videoUrl: (string) $this->post->getMediaUrl(),
             caption: $common['caption'],
             altText: $common['alt_text'],
             isAiGenerated: $common['is_ai_generated'],

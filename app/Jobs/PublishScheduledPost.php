@@ -21,6 +21,11 @@ use Throwable;
  * - Service katmanında atomic claim + container resume + media_id guard
  * - failed() → event dispatch (Telegram uyarısı)
  * - tries=3, backoff=[60,180,300] → aşamalı retry
+ *
+ * LEGACY — InstagramPost zamanlanmış yayın job'ı. Pasif domain; yeni akış
+ * PublishScheduledPublication job'ına taşındı.
+ *
+ * @deprecated PublishScheduledPublication kullanın.
  */
 class PublishScheduledPost implements ShouldBeUnique, ShouldQueue
 {

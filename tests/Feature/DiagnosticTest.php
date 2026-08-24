@@ -2,6 +2,7 @@
 
 use App\Events\PostPublishFailed;
 use App\Filament\App\Resources\InstagramPosts\Pages\CreateInstagramPost;
+use App\Listeners\NotifyPublishFailedListener;
 use App\Models\InstagramAccount;
 use App\Models\InstagramPost;
 use App\Models\Team;
@@ -62,7 +63,9 @@ test('DEBUG publish-scheduled job runs and dispatches PostPublishFailed', functi
         '*' => Http::response(),
     ]);
 
-    Event::fake([PostPublishFailed::class]);
+    // PostPublishFailed event'i fake'EDİLMEZ ki NotifyPublishFailedListener
+    // çalışsın ve Telegram isteği gerçekten gitsin; diğer event'ler fake.
+    Event::fakeExcept([PostPublishFailed::class]);
 
     try {
         Artisan::call('instagram:publish-scheduled');
@@ -73,7 +76,7 @@ test('DEBUG publish-scheduled job runs and dispatches PostPublishFailed', functi
     $post->refresh();
     dump(['post status after' => $post->status]);
 
-    Event::assertDispatched(PostPublishFailed::class);
+    Event::assertListening(PostPublishFailed::class, NotifyPublishFailedListener::class);
     Http::assertSent(fn ($r) => str_contains($r->url(), 'api.telegram.org'));
 });
 

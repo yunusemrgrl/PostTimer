@@ -10,10 +10,13 @@ use App\Domain\Instagram\Media\VideoMedia;
 use App\Models\InstagramPost;
 
 /**
- * DB'deki iki eksenli (media_type + media_product_type) girdiyi somut bir
- * domain medya nesnesine eşler. Mevcut model davranışları (isCarousel,
- * product türleri) korunarak kullanılır — yeni kod string karşılaştırmaları
- * burada teke indirir.
+ * İki eksenli (media_type + media_product_type / type + surface) girdiyi
+ * somut bir domain medya nesnesine eşler. Kaynak model InstagramPost
+ * olabileceği gibi Content de olabilir — ikisi de HasPublishableMedia
+ * sözleşmesini uygular. Mevcut model davranışları (isCarousel, product
+ * türleri) korunarak kullanılır — string karşılaştırmaları burada teke
+ * indirilir (InstagramPost ve Content sabitleri aynı Meta değerlerini
+ * taşır).
  */
 class InstagramMediaFactory
 {
@@ -26,31 +29,31 @@ class InstagramMediaFactory
         return app(self::class);
     }
 
-    public function make(InstagramPost $post): InstagramMedia
+    public function make(HasPublishableMedia $source): InstagramMedia
     {
-        if ($post->isCarousel()) {
-            return new CarouselMedia($post);
+        if ($source->isCarousel()) {
+            return new CarouselMedia($source);
         }
 
-        $product = $post->media_product_type;
-        $mediaType = $post->media_type;
+        $product = $source->getMediaProductType();
+        $mediaType = $source->getMediaType();
 
         // STORY → media_type=STORIES
         if ($product === InstagramPost::PRODUCT_TYPE_STORY || $mediaType === InstagramPost::MEDIA_TYPE_STORIES) {
-            return new StoryMedia($post);
+            return new StoryMedia($source);
         }
 
         // REELS → media_type=REELS
         if ($product === InstagramPost::PRODUCT_TYPE_REELS || $mediaType === InstagramPost::MEDIA_TYPE_REELS) {
-            return new ReelMedia($post);
+            return new ReelMedia($source);
         }
 
         // FEED video → media_type=VIDEO
         if ($mediaType === InstagramPost::MEDIA_TYPE_VIDEO) {
-            return new VideoMedia($post);
+            return new VideoMedia($source);
         }
 
         // IMAGE + FEED (ve bilinmeyen varsayılan) → media_type=IMAGE
-        return new ImageMedia($post);
+        return new ImageMedia($source);
     }
 }
