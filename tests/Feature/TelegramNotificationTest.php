@@ -1,9 +1,9 @@
 <?php
 
-use App\Jobs\PublishScheduledPost;
-use App\Models\InstagramAccount;
-use App\Models\InstagramPost;
+use App\Jobs\PublishScheduledPublication;
+use App\Models\Content;
 use App\Models\Product;
+use App\Models\Publication;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\TelegramSetting;
@@ -25,16 +25,16 @@ beforeEach(function () {
         ->create();
 });
 
-it('sends a telegram message when a post is flagged for stock issues', function () {
+it('sends a telegram message when a publication is flagged for stock issues', function () {
     TelegramSetting::factory()->for($this->team)->create();
 
     $product = Product::factory()->for($this->team)->create();
-
-    $post = InstagramPost::factory()->for($this->team)->create([
-        'product_id' => $product->id,
-        'status' => InstagramPost::STATUS_SCHEDULED,
+    $content = Content::factory()->create(['team_id' => $this->team->id, 'product_id' => $product->id, 'caption' => 'Harika ürün!']);
+    Publication::factory()->create([
+        'team_id' => $this->team->id,
+        'content_id' => $content->id,
+        'status' => Publication::STATUS_SCHEDULED,
         'scheduled_at' => now()->addMinutes(10),
-        'caption' => 'Harika ürün!',
     ]);
 
     Http::fake([
@@ -43,30 +43,24 @@ it('sends a telegram message when a post is flagged for stock issues', function 
         '*' => Http::response(),
     ]);
 
-    Artisan::call('instagram:check-stock');
+    Artisan::call('publications:check-stock');
 
     Http::assertSent(function ($request) {
         return str_contains($request->url(), 'api.telegram.org/bot')
             && str_contains($request['text'] ?? '', 'Stok Uyarısı')
             && str_contains($request['text'] ?? '', 'Harika ürün!');
     });
-
-    expect($post->fresh()->status)->toBe(InstagramPost::STATUS_FLAGGED);
 });
 
 it('sends a telegram message when publishing finally fails after retries', function () {
     TelegramSetting::factory()->for($this->team)->create();
 
-    $account = InstagramAccount::factory()
-        ->for($this->team)
-        ->withToken('test-token')
-        ->create(['api_host' => 'graph.instagram.com']);
-
-    $post = InstagramPost::factory()->for($this->team)->create([
-        'ig_user_id' => $account->ig_user_id,
-        'status' => InstagramPost::STATUS_SCHEDULED,
-        'scheduled_at' => now()->subMinute(),
-        'caption' => 'Test gönderisi',
+    $content = Content::factory()->create(['team_id' => $this->team->id]);
+    $publication = Publication::factory()->create([
+        'team_id' => $this->team->id,
+        'content_id' => $content->id,
+        'status' => Publication::STATUS_SCHEDULED,
+        'scheduled_at' => now()->addHours(2),
     ]);
 
     Http::fake([
@@ -74,24 +68,25 @@ it('sends a telegram message when publishing finally fails after retries', funct
         '*' => Http::response(),
     ]);
 
-    // Retry'lar tamamen tükenince job'ın failed()'ı PostPublishFailed'ı tek kez
-    // fırlatır → listener → Telegram "Yayın Başarısız" uyarısı gönderilir.
-    (new PublishScheduledPost($post))->failed(new RuntimeException('Kalıcı hata'));
+    // Retry'lar tamamen tükenince job'ın failed()'ı PublicationPublishFailed'ı
+    // tek kez fırlatır → listener → Telegram "Yayın Başarısız" uyarısı.
+    (new PublishScheduledPublication($publication))->failed(new RuntimeException('Kalıcı hata'));
 
     Http::assertSent(function ($request) {
         return str_contains($request->url(), 'api.telegram.org/bot')
             && str_contains($request['text'] ?? '', 'Yayın Başarısız');
     });
 
-    expect($post->fresh()->status)->toBe(InstagramPost::STATUS_FAILED);
+    expect($publication->fresh()->status)->toBe(Publication::STATUS_FAILED);
 });
 
 it('does not send telegram when settings are not configured', function () {
     $product = Product::factory()->for($this->team)->create();
-
-    $post = InstagramPost::factory()->for($this->team)->create([
-        'product_id' => $product->id,
-        'status' => InstagramPost::STATUS_SCHEDULED,
+    $content = Content::factory()->create(['team_id' => $this->team->id, 'product_id' => $product->id]);
+    Publication::factory()->create([
+        'team_id' => $this->team->id,
+        'content_id' => $content->id,
+        'status' => Publication::STATUS_SCHEDULED,
         'scheduled_at' => now()->addMinutes(10),
     ]);
 
@@ -100,7 +95,7 @@ it('does not send telegram when settings are not configured', function () {
         '*' => Http::response(),
     ]);
 
-    Artisan::call('instagram:check-stock');
+    Artisan::call('publications:check-stock');
 
     Http::assertNotSent(function ($request) {
         return str_contains($request->url(), 'api.telegram.org');

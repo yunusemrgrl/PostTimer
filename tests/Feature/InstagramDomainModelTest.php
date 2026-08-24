@@ -1,19 +1,12 @@
 <?php
 
-use App\Events\PostPublished;
 use App\Models\InstagramAccount;
 use App\Models\InstagramPost;
 use App\Services\InstagramPublishingService;
-use App\Services\PublishInstagramPostService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 
 uses(RefreshDatabase::class);
-
-beforeEach(function () {
-    Event::fake([PostPublished::class]);
-});
 
 function connectAccountForDomain(InstagramPost $post): InstagramAccount
 {
@@ -25,131 +18,6 @@ function connectAccountForDomain(InstagramPost $post): InstagramAccount
             'api_host' => 'graph.instagram.com',
         ]);
 }
-
-function publishResponseSequence(): void
-{
-    Http::fakeSequence()
-        ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
-        ->push(['id' => 'ig_container_1'])
-        ->push(['status_code' => 'FINISHED'])
-        ->push(['id' => 'ig_media_1'])
-        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1'])
-        ->dontFailWhenEmpty();
-}
-
-function publishResponseSequenceNoStatus(): void
-{
-    Http::fakeSequence()
-        ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
-        ->push(['id' => 'ig_container_1'])
-        ->push(['id' => 'ig_media_1'])
-        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1'])
-        ->dontFailWhenEmpty();
-}
-
-it('sends VIDEO + REELS to Meta API as media_type=REELS', function () {
-    publishResponseSequence();
-
-    $post = InstagramPost::factory()->reels()->create();
-    connectAccountForDomain($post);
-
-    (new PublishInstagramPostService)->publish($post);
-
-    expect($post->fresh())->status->toBe(InstagramPost::STATUS_PUBLISHED);
-
-    Http::assertSent(function ($request) use ($post) {
-        return $request->method() === 'POST'
-            && str_contains($request->url(), '/media')
-            && ! str_contains($request->url(), 'media_publish')
-            && ($request['media_type'] ?? null) === 'REELS'
-            && ($request['video_url'] ?? null) === $post->fresh()->media_url;
-    });
-});
-
-it('sends IMAGE + FEED to Meta API as media_type=IMAGE', function () {
-    publishResponseSequenceNoStatus();
-
-    $post = InstagramPost::factory()->create([
-        'media_type' => InstagramPost::MEDIA_TYPE_IMAGE,
-        'media_product_type' => InstagramPost::PRODUCT_TYPE_FEED,
-    ]);
-    connectAccountForDomain($post);
-
-    (new PublishInstagramPostService)->publish($post);
-
-    expect($post->fresh())->status->toBe(InstagramPost::STATUS_PUBLISHED);
-
-    Http::assertSent(function ($request) {
-        return $request->method() === 'POST'
-            && str_contains($request->url(), '/media')
-            && ! str_contains($request->url(), 'media_publish')
-            && ($request['media_type'] ?? null) === 'IMAGE'
-            && isset($request['image_url']);
-    });
-});
-
-it('sends VIDEO + STORY to Meta API as media_type=STORIES', function () {
-    publishResponseSequence();
-
-    $post = InstagramPost::factory()->create([
-        'media_type' => InstagramPost::MEDIA_TYPE_VIDEO,
-        'media_product_type' => InstagramPost::PRODUCT_TYPE_STORY,
-        'media_url' => 'https://example.com/videos/story.mp4',
-    ]);
-    connectAccountForDomain($post);
-
-    (new PublishInstagramPostService)->publish($post);
-
-    Http::assertSent(function ($request) {
-        return $request->method() === 'POST'
-            && str_contains($request->url(), '/media')
-            && ! str_contains($request->url(), 'media_publish')
-            && ($request['media_type'] ?? null) === 'STORIES'
-            && ($request['video_url'] ?? null) === 'https://example.com/videos/story.mp4';
-    });
-});
-
-it('sends IMAGE + STORY to Meta API as media_type=STORIES', function () {
-    publishResponseSequenceNoStatus();
-
-    $post = InstagramPost::factory()->story()->create();
-    connectAccountForDomain($post);
-
-    (new PublishInstagramPostService)->publish($post);
-
-    Http::assertSent(function ($request) {
-        return $request->method() === 'POST'
-            && str_contains($request->url(), '/media')
-            && ! str_contains($request->url(), 'media_publish')
-            && ($request['media_type'] ?? null) === 'STORIES'
-            && isset($request['image_url']);
-    });
-});
-
-it('sends CAROUSEL_ALBUM + FEED to Meta API as media_type=CAROUSEL', function () {
-    Http::fakeSequence()
-        ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
-        ->push(['id' => 'ig_child_1'])
-        ->push(['id' => 'ig_child_2'])
-        ->push(['id' => 'ig_container_1'])
-        ->push(['id' => 'ig_media_1'])
-        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1'])
-        ->dontFailWhenEmpty();
-
-    $post = InstagramPost::factory()->carousel()->create();
-    connectAccountForDomain($post);
-
-    (new PublishInstagramPostService)->publish($post);
-
-    expect($post->fresh())->status->toBe(InstagramPost::STATUS_PUBLISHED);
-
-    Http::assertSent(function ($request) {
-        return $request->method() === 'POST'
-            && str_contains($request->url(), '/media')
-            && ! str_contains($request->url(), 'media_publish')
-            && ($request['media_type'] ?? null) === 'CAROUSEL';
-    });
-});
 
 it('syncs like_count, comments_count, permalink, thumbnail_url from API media response', function () {
     $apiResponse = [

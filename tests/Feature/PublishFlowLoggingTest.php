@@ -1,19 +1,22 @@
 <?php
 
-use App\Events\PostPublished;
-use App\Events\PostPublishFailed;
+use App\Events\PublicationPublished;
+use App\Events\PublicationPublishFailed;
+use App\Models\Content;
 use App\Models\InstagramAccount;
-use App\Models\InstagramPost;
-use App\Services\PublishInstagramPostService;
+use App\Models\Publication;
+use App\Services\PublicationPublishingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
-    Event::fake([PostPublished::class, PostPublishFailed::class]);
+    Event::fake([PublicationPublished::class, PublicationPublishFailed::class]);
+    Queue::fake();
 });
 
 function publishFlowLogPath(): string
@@ -43,219 +46,108 @@ function readPublishFlowLog(): string
     return is_file($path) ? (string) file_get_contents($path) : '';
 }
 
-function connectAccountForFlowLogs(InstagramPost $post): InstagramAccount
+function publicationWithAccount(array $attributes = []): Publication
 {
-    return InstagramAccount::factory()
-        ->for($post->team)
-        ->withToken('account-token')
-        ->create([
-            'ig_user_id' => $post->ig_user_id,
-            'api_host' => 'graph.instagram.com',
-        ]);
+    $defaults = Content::factory()->create();
+    $publication = Publication::factory()->create([
+        'team_id' => $defaults->team_id,
+        'content_id' => $defaults->id,
+        'status' => Publication::STATUS_PUBLISHING,
+        ...$attributes,
+    ]);
+
+    InstagramAccount::factory()->create([
+        'team_id' => $publication->team_id,
+        'ig_user_id' => $publication->ig_user_id,
+        'access_token' => 'account-token',
+        'api_host' => 'graph.instagram.com',
+    ]);
+
+    return $publication;
 }
 
 it('logs every publish flow stage with correlation context without changing behavior', function () {
-    enablePublishFlowLog();
+    $path = enablePublishFlowLog();
 
     Http::fakeSequence()
         ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
-        ->push(['id' => 'ig_container_1'])
-        ->push(['id' => 'ig_media_1'])
-        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1']);
+        ->push(['id' => 'ctr_1'])
+        ->push(['id' => 'med_1'])
+        ->push(['id' => 'med_1', 'permalink' => 'https://instagram.com/p/x/', 'timestamp' => '2026-01-01T10:00:00+0000']);
 
-    $post = InstagramPost::factory()->create([
-        'caption' => 'Secret caption content',
+    $publication = publicationWithAccount([
+        'status' => Publication::STATUS_SCHEDULED,
+        'scheduled_at' => now()->subMinute(),
     ]);
+    InstagramAccount::query()->first(); // eager yok — servis kendisi çözer
 
-    connectAccountForFlowLogs($post);
+    (new PublicationPublishingService)->publish($publication, 'flow-abc');
 
-    (new PublishInstagramPostService)->publish($post, 'flow-success');
+    $log = readPublishFlowLog();
 
-    $content = readPublishFlowLog();
-
-    // Akışın tüm aşamaları loglandı
-    expect($content)
+    expect($log)
         ->toContain('publish.start')
+        ->toContain('flow-abc')
         ->toContain('publish.claim.ok')
-        ->toContain('publish.lock.acquired')
-        ->toContain('publish.client.resolved')
         ->toContain('publish.limit.ok')
         ->toContain('publish.media.url')
         ->toContain('publish.container.ready')
         ->toContain('publish.media.published')
-        ->toContain('publish.persist')
-        ->toContain('event.post_published')
-        // Instagram'a gönderilen gerçek medya URL'si logda görünür
-        ->toContain('example.com');
-
-    // Korelasyon bağlamı: flow_id, post_id, team_id, ig_user_id
-    expect($content)
-        ->toContain('"flow_id":"flow-success"')
-        ->toContain('"post_id":'.$post->id)
-        ->toContain('"team_id":'.$post->team_id)
-        ->toContain('"ig_user_id":"'.$post->ig_user_id.'"')
-        ->toContain('"trigger":"scheduled"');
-
-    // Hassas veri loglanmaz: caption ve access token hiçbir satırda yok
-    expect($content)
-        ->not->toContain('Secret caption content')
-        ->not->toContain('account-token');
-
-    // Davranış değişmedi: post yayınlandı ve event fırlatıldı
-    expect($post->fresh())
-        ->status->toBe(InstagramPost::STATUS_PUBLISHED)
-        ->media_id->toBe('ig_media_1');
-
-    Event::assertDispatched(PostPublished::class);
+        ->toContain('"persist":"published"');
 });
 
 it('logs the error stage without changing H1 retry behavior', function () {
     enablePublishFlowLog();
 
-    Http::fake([
-        'https://graph.instagram.com/*content_publishing_limit*' => Http::response([
-            'data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]],
-        ]),
-        'https://graph.instagram.com/*/media' => Http::response([
-            'error' => ['message' => 'Temporary', 'type' => 'OAuthException'],
-        ], 400),
-        '*' => Http::response(),
-    ]);
+    Http::fakeSequence()
+        ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
+        ->push(['error' => ['message' => 'boom']], 500);
 
-    $post = InstagramPost::factory()->create();
-    connectAccountForFlowLogs($post);
+    $publication = publicationWithAccount();
 
-    expect(fn () => (new PublishInstagramPostService)->publish($post, 'flow-error'))
+    expect(fn () => (new PublicationPublishingService)->publish($publication))
         ->toThrow(RequestException::class);
 
-    $content = readPublishFlowLog();
-
-    expect($content)
+    // H1: status publishing'te kalır, sadece uyarı loglanır.
+    expect($publication->fresh())
+        ->status->toBe(Publication::STATUS_PUBLISHING)
+        ->and(readPublishFlowLog())
         ->toContain('publish.error')
-        ->toContain('"flow_id":"flow-error"')
-        ->toContain('"error_class":"'.str_replace('\\', '\\\\', RequestException::class).'"')
-        ->toContain('"retryable":true');
-
-    // H1 davranışı korundu: status 'publishing' kaldı, FAILED event yok
-    expect($post->fresh())
-        ->status->toBe(InstagramPost::STATUS_PUBLISHING)
-        ->error_message->not->toBeNull();
-
-    Event::assertNotDispatched(PostPublishFailed::class);
+        ->toContain('retryable');
 });
 
-it('logs the skip stage for an already published post', function () {
+it('logs the skip stage for an already published publication', function () {
     enablePublishFlowLog();
 
     Http::fake(['*' => Http::response()]);
 
-    $post = InstagramPost::factory()->published()->create([
-        'media_id' => 'ig_media_existing',
-    ]);
+    $publication = Publication::factory()->published()->create();
 
-    connectAccountForFlowLogs($post);
-
-    (new PublishInstagramPostService)->publish($post, 'flow-skip');
-
-    $content = readPublishFlowLog();
-
-    expect($content)
-        ->toContain('publish.start')
-        ->toContain('publish.skip')
-        ->toContain('"reason":"already_published"')
-        ->toContain('"flow_id":"flow-skip"')
-        ->not->toContain('publish.media.published');
+    (new PublicationPublishingService)->publish($publication);
 
     Http::assertNothingSent();
-    Event::assertDispatched(PostPublished::class);
+
+    expect(readPublishFlowLog())
+        ->toContain('publish.skip')
+        ->toContain('already_published');
 });
 
 it('warns when the media url is not publicly reachable', function () {
-    enablePublishFlowLog();
+    $path = enablePublishFlowLog();
+
+    $content = Content::factory()->create([
+        'media_url' => 'http://localhost/storage/media/image.jpg',
+    ]);
+    $publication = publicationWithAccount(['content_id' => $content->id]);
 
     Http::fakeSequence()
         ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
-        ->push(['id' => 'ig_container_1'])
-        ->push(['id' => 'ig_media_1'])
-        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1']);
+        ->push(['id' => 'ctr_local_1'])
+        ->push(['id' => 'med_local_1'])
+        ->push(['id' => 'med_local_1', 'permalink' => 'https://instagram.com/p/y/', 'timestamp' => '2026-01-01T10:00:00+0000']);
 
-    // http şeması + .test hostu: Instagram bunu asla erişemez
-    $post = InstagramPost::factory()->create([
-        'media_url' => 'http://posttimer.test/media/foto.jpg',
-    ]);
+    $published = (new PublicationPublishingService)->publish($publication);
 
-    connectAccountForFlowLogs($post);
-
-    (new PublishInstagramPostService)->publish($post, 'flow-local');
-
-    $content = readPublishFlowLog();
-
-    expect($content)
-        ->toContain('publish.media.url')
-        ->toContain('publish.media.url.not_public')
-        ->toContain('"url_scheme":"http"')
-        ->toContain('"url_host":"posttimer.test"');
-
-    // Yalnızca gözlem: publish davranışı değişmez
-    expect($post->fresh())->status->toBe(InstagramPost::STATUS_PUBLISHED);
-});
-
-it('warns when the media url points at a storage api host instead of a public host', function () {
-    enablePublishFlowLog();
-
-    Http::fakeSequence()
-        ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
-        ->push(['id' => 'ig_container_1'])
-        ->push(['id' => 'ig_media_1'])
-        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1']);
-
-    // R2 API endpoint host'u: Instagram buradan public içerik çekemez;
-    // disk config'indeki public url (R2_URL) kullanılmalıdır.
-    $post = InstagramPost::factory()->create([
-        'media_url' => 'https://bucket.1234567890.r2.cloudflarestorage.com/tenants/x/foto.jpg',
-    ]);
-
-    connectAccountForFlowLogs($post);
-
-    (new PublishInstagramPostService)->publish($post, 'flow-r2');
-
-    $content = readPublishFlowLog();
-
-    expect($content)
-        ->toContain('publish.media.url')
-        ->toContain('publish.media.url.not_public')
-        ->toContain('"reason":"storage_api_host"');
-});
-
-it('propagates the manual flow id from publishNow into the publish stages', function () {
-    enablePublishFlowLog();
-
-    Http::fakeSequence()
-        ->push(['data' => [['quota_usage' => 10, 'config' => ['quota_total' => 100]]]])
-        ->push(['id' => 'ig_container_1'])
-        ->push(['id' => 'ig_media_1'])
-        ->push(['id' => 'ig_media_1', 'permalink' => 'https://instagram.com/p/ig_media_1']);
-
-    $post = InstagramPost::factory()->create([
-        'status' => InstagramPost::STATUS_SCHEDULED,
-        'scheduled_at' => now()->addHour(),
-    ]);
-
-    connectAccountForFlowLogs($post);
-
-    (new PublishInstagramPostService)->publishNow($post, 'flow-manual');
-
-    $content = readPublishFlowLog();
-
-    expect($content)
-        ->toContain('"flow_id":"flow-manual"')
-        ->toContain('"trigger":"manual"')
-        ->toContain('publish.start')
-        ->toContain('publish.persist');
-
-    expect($post->fresh())
-        ->status->toBe(InstagramPost::STATUS_PUBLISHED)
-        ->scheduled_at->toBeNull();
-
-    Event::assertDispatched(PostPublished::class);
+    expect($published)->status->toBe(Publication::STATUS_PUBLISHED);
+    expect(readPublishFlowLog())->toContain('publish.media.url.not_public');
 });

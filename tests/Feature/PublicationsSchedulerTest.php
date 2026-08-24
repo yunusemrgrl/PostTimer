@@ -157,6 +157,25 @@ it('checks each product only once across its publications', function () {
     Http::assertSentCount(1);
 });
 
+it('ignores publications more than 20 minutes away from publishing', function () {
+    Http::fake([
+        'amazon.com.tr/*' => Http::response('<html><body>Stok tükendi</body></html>'),
+    ]);
+
+    $product = Product::factory()->create();
+    $content = Content::factory()->create(['team_id' => $product->team_id, 'product_id' => $product->id]);
+    $publication = Publication::factory()->create([
+        'team_id' => $product->team_id,
+        'content_id' => $content->id,
+        'status' => Publication::STATUS_SCHEDULED,
+        'scheduled_at' => now()->addMinutes(45),
+    ]);
+
+    $this->artisan('publications:check-stock')->assertSuccessful();
+
+    expect($publication->fresh())->status->toBe(Publication::STATUS_SCHEDULED);
+});
+
 it('excludes flagged publications from the publish scheduler', function () {
     Queue::fake();
 

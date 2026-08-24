@@ -1,9 +1,7 @@
 <?php
 
-use App\Jobs\PublishScheduledPost;
 use App\Jobs\PublishScheduledPublication;
 use App\Models\InstagramAccount;
-use App\Models\InstagramPost;
 use App\Models\Publication;
 use App\Services\PublicationPublishingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -155,17 +153,14 @@ it('skips flagged publications', function () {
     expect($publication->fresh())->status->toBe(Publication::STATUS_FLAGGED);
 });
 
-it('mirrors the legacy post job configuration where intentional', function () {
-    $legacy = new PublishScheduledPost(InstagramPost::factory()->create());
+it('keeps its retry and uniqueness configuration', function () {
     $publication = Publication::factory()->create();
     $job = new PublishScheduledPublication($publication);
 
-    // tries ve timeout legacy job ile aynıdır; retry aralıkları artık
-    // exponential (30sn → 2dk → 5dk) olduğundan ve uniqueFor yeni toplam
-    // süreyi (≈15 dk) kapsayacak şekilde büyütüldüğünden bilinçli olarak
-    // sapar.
-    expect($job->tries)->toBe($legacy->tries)
-        ->and($job->timeout)->toBe($legacy->timeout)
+    expect($job->tries)->toBe(3)
+        ->and($job->timeout)->toBe(85)
         ->and($job->backoff())->toBe([30, 120, 300])
-        ->and($job->uniqueFor)->toBe(900);
+        // Kilit, en kötü toplam çalışma süresini (≈15 dk) kapsamalı.
+        ->and($job->uniqueFor)->toBe(900)
+        ->and($job->uniqueId())->toBe('publish-publication-'.$publication->id);
 });

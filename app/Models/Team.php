@@ -46,8 +46,11 @@ class Team extends Model implements HasCurrentTenantLabel
     }
 
     /**
-     * Bu hesaba (tenant) ait Instagram gönderileri. Filament'in App
-     * panelindeki ownership relationship mekanizması bu ilişkiyi kullanır.
+     * Bu hesaba (tenant) ait LEGACY Instagram gönderileri.
+     *
+     * @deprecated Publish domain'i Content → Publication'a taşındı; bu
+     * ilişki yalnızca tarihsel instagram_posts verisinin okunabilirliği
+     * için tutulur. Yeni kod Publication::query() kullanmalıdır.
      */
     public function instagramPosts(): HasMany
     {
