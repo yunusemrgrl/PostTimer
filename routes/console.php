@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\PublicationsHealth;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -32,7 +33,9 @@ Schedule::command('instagram:notify-expiring-tokens')
  */
 Schedule::command('publications:publish-scheduled')
     ->everyMinute()
-    ->withoutOverlapping();
+    ->withoutOverlapping()
+    ->onSuccess(fn () => PublicationsHealth::recordRun('publications:publish-scheduled', true))
+    ->onFailure(fn () => PublicationsHealth::recordRun('publications:publish-scheduled', false));
 
 /*
  * Yaklaşan yayınların hesap sağlığını proaktif doğrular: önümüzdeki 1 saatte
@@ -41,7 +44,9 @@ Schedule::command('publications:publish-scheduled')
  */
 Schedule::command('publications:check-connections')
     ->everyFifteenMinutes()
-    ->withoutOverlapping();
+    ->withoutOverlapping()
+    ->onSuccess(fn () => PublicationsHealth::recordRun('publications:check-connections', true))
+    ->onFailure(fn () => PublicationsHealth::recordRun('publications:check-connections', false));
 
 /*
  * Worker çökmesinden sonra "publishing" durumunda takılı kalan yayınları
@@ -49,7 +54,9 @@ Schedule::command('publications:check-connections')
  */
 Schedule::command('publications:recover-stuck')
     ->everyFifteenMinutes()
-    ->withoutOverlapping();
+    ->withoutOverlapping()
+    ->onSuccess(fn () => PublicationsHealth::recordRun('publications:recover-stuck', true))
+    ->onFailure(fn () => PublicationsHealth::recordRun('publications:recover-stuck', false));
 
 /*
  * Just-In-Time stok kontrolünü Publication karşılığı — mevcut

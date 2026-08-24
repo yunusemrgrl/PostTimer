@@ -15,22 +15,22 @@ Tamamlanan büyük işler (commit'lerde):
 
 ## Yapılacaklar
 
-### [ ] V1 — Curator video thumbnail sağlamlaştırma
+### [x] V1 — Curator video thumbnail sağlamlaştırma
 Sahip: MediaObserver::generateVideoThumbnail
-- [ ] `ffmpegAvailable()` — Cache (1 gün) + `where/which ffmpeg`; yoksa
+- [x] `ffmpegAvailable()` — Cache (1 gün) + `where/which ffmpeg`; yoksa
       `curations.thumbnail_status = 'ffmpeg_missing'`
-- [ ] Thumbnail boyut > 0 doğrulaması; hata durumunda
+- [x] Thumbnail boyut > 0 doğrulaması; hata durumunda
       `curations.thumbnail_status = 'failed'` + mesaj
-- [ ] Başarıda `thumbnail_status = 'ok'`
-- [ ] Neden `thumbnailUrl()` null döndü artık sorgulanabilir
-- [ ] Testler: ffmpeg-yok, ffmpeg-hatası, başarılı üretim
+- [x] Başarıda `thumbnail_status = 'ok'`
+- [x] Neden `thumbnailUrl()` null döndü artık sorgulanabilir
+- [x] Testler: VideoThumbnailRobustnessTest (ffmpeg-yok, cache'li probe, ffmpeg-hatası)
 
-### [ ] O1 — Scheduler gözlemlenebilirliği
-- [ ] Üç yayın komutuna `onSuccess`/`onFailure` → Cache `sched:last-run:{cmd}` (TTL 2 gün)
-- [ ] `onFailure` → Telegram tek satır uyarı (NotificationService::notifyTeam)
-- [ ] Yeni `publications:health`: takılı publishing sayısı, 24 saatlik yayın planı,
+### [x] O1 — Scheduler gözlemlenebilirliği
+- [x] Üç yayın komutuna `onSuccess`/`onFailure` → Cache `sched:last-run:{cmd}` (TTL 2 gün)
+- [x] `onFailure` → Telegram tek satır uyarı (notifyTeams)
+- [x] Yeni `publications:health`: takılı publishing sayısı, 24 saatlik yayın planı,
       token süresi yaklaşan hesaplar, son çalışma durumları; sorun varsa FAILURE
-- [ ] Testler: health çıktısı/exit kodları, failure callback cache yazımı
+- [x] Testler: PublicationsHealthTest (healthy/fail-stuck/fail-last-run/cache/output)
 
 ### Sonraki adaylar (henüz planlanmadı)
 - MCP server + `schedule_publication` tool'u (dependency onayı gerektirir)
