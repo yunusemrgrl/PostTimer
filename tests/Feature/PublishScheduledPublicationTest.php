@@ -158,9 +158,9 @@ it('keeps its retry and uniqueness configuration', function () {
     $job = new PublishScheduledPublication($publication);
 
     expect($job->tries)->toBe(3)
-        ->and($job->timeout)->toBe(85)
+        ->and($job->timeout)->toBe(420)
         ->and($job->backoff())->toBe([30, 120, 300])
-        // Kilit, en kötü toplam çalışma süresini (≈15 dk) kapsamalı.
-        ->and($job->uniqueFor)->toBe(900)
+        // Kilit, en kötü toplam çalışma süresini (≈30 dk) kapsamalı.
+        ->and($job->uniqueFor)->toBe(1800)
         ->and($job->uniqueId())->toBe('publish-publication-'.$publication->id);
 });

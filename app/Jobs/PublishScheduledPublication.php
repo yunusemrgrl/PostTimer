@@ -44,17 +44,21 @@ class PublishScheduledPublication implements ShouldBeUnique, ShouldQueue
         return [30, 120, 300];
     }
 
-    public int $timeout = 85;
+    /**
+     * VIDEO akışı container status'unu Meta'nın önerisiyle 1 dk aralıkla
+     * en fazla 5 kez poll eder (≈5 dk) + upload süresi. 85 sn'lik eski
+     * değer video yayını worker'ı ortadan kesiyor ve yayın recover-stuck
+     * tarafından haksızca FAILED'e çekiliyordu (TryPost'un 900 sn
+     * "download/upload + poll headroom" gerekçesinin video ayakları).
+     */
+    public int $timeout = 420;
 
     /**
      * ShouldBeUnique kilidinin ne kadar süre tutulacağı. Job'un en kötü
      * ihtimalle tamamlanma süresi: (tries × timeout) + sum(backoff) + pay
-     * = (3 × 85) + 450 + pay ≈ 15 dk. Bu olmadan varsayılan davranış,
-     * kilidi job tamamlanana/failed() tetiklenene kadar süresiz tutar —
-     * worker temiz ölürse kilit takılı kalabilir ve yayın bir daha hiç
-     * dispatch edilemez.
+     * = (3 × 420) + 450 + pay → 30 dk güvenli üst sınır.
      */
-    public int $uniqueFor = 900;
+    public int $uniqueFor = 1800;
 
     public function __construct(
         public Publication $publication,
