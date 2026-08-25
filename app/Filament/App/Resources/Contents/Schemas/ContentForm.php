@@ -42,11 +42,7 @@ class ContentForm
                         CuratorPicker::make('media_url')
                             ->label('Medya')
                             ->buttonLabel('Medya seç')
-                            ->acceptedFileTypes(fn (Get $get): array => match ($get('type')) {
-                                Content::TYPE_IMAGE => ['image/*'],
-                                Content::TYPE_VIDEO => ['video/*'],
-                                default => ['image/*', 'video/*'],
-                            })
+                            ->acceptedFileTypes(['image/*', 'video/*'])
                             ->maxSize(102400)
                             ->required(fn (Get $get): bool => $get('type') !== Content::TYPE_CAROUSEL_ALBUM)
                             ->visible(fn (Get $get): bool => $get('type') !== Content::TYPE_CAROUSEL_ALBUM)
