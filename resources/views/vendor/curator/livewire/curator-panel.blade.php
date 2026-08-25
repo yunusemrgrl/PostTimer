@@ -165,8 +165,8 @@
                         wire:key="media-{{ $file['id'] }}"
                         class="relative aspect-square group"
                         @if ($fileNeedsThumbnail)
-                            x-data="{ mediaId: {{ $file['id'] }}, videoUrl: @js($file['url'] ?? '') }"
-                            x-init="window.generateVideoThumbnail?.($el, mediaId, videoUrl)"
+                            x-data="{ mediaName: @js($file['name'] ?? ''), videoUrl: @js($file['url'] ?? '') }"
+                            x-init="window.generateVideoThumbnail?.($el, mediaName, videoUrl)"
                         @endif
                     >
                         <button

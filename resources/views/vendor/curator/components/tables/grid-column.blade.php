@@ -7,8 +7,8 @@
 
 <div {{ $attributes->merge($getExtraAttributes())->class(['curator-grid-column absolute inset-0 rounded-t-xl overflow-hidden']) }}
     @if ($needsThumbnail)
-        x-data="{ mediaId: {{ $record->id }}, videoUrl: @js($record->url) }"
-        x-init="window.generateVideoThumbnail?.($el, mediaId, videoUrl)"
+        x-data="{ mediaName: @js($record->name), videoUrl: @js($record->url) }"
+        x-init="window.generateVideoThumbnail?.($el, mediaName, videoUrl)"
     @endif
 >
     <div @class([

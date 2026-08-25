@@ -3,23 +3,25 @@
  *
  * Called from Curator gallery/listing views via Alpine x-init when a video
  * record has no stored thumbnail (thumbnail_status = 'pending'). Captures
- * the first frame, uploads it to POST /media/{id}/thumbnail, and replaces
- * the film-icon placeholder with the resulting <img>.
+ * the first frame via <canvas> and uploads it to the thumbnail endpoint.
  *
- * No server-side FFmpeg dependency. Falls back to the same-origin proxy
- * route (/media/{id}/video) if the direct CDN URL fails CORS.
+ * Routes use {media:name} binding, so we pass the media *name* (UUID),
+ * not the numeric id. The same-origin proxy route (/media/{name}/video)
+ * streams the video without CORS restrictions — canvas captured from
+ * same-origin is not tainted.
  */
-window.generateVideoThumbnail = function (element, mediaId, videoUrl) {
-    if (!mediaId || !videoUrl) return;
+window.generateVideoThumbnail = function (element, mediaName, videoUrl) {
+    if (!mediaName) return;
     if (element.dataset.thumbnailProcessed) return;
     element.dataset.thumbnailProcessed = '1';
 
-    var proxyUrl = '/media/' + mediaId + '/video';
+    var proxyUrl = '/media/' + mediaName + '/video';
+    var thumbnailUrl = '/media/' + mediaName + '/thumbnail';
     var csrfToken = document.querySelector('meta[name="csrf-token"]');
     if (!csrfToken) return;
 
     function uploadThumbnail(dataUrl) {
-        fetch('/media/' + mediaId + '/thumbnail', {
+        fetch(thumbnailUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -41,9 +43,13 @@ window.generateVideoThumbnail = function (element, mediaId, videoUrl) {
             .catch(function () {});
     }
 
-    function captureFrame(url, useCors, isFallback) {
+    function captureFrame(url, isFallback) {
         var video = document.createElement('video');
-        if (useCors) video.crossOrigin = 'anonymous';
+        // Only set crossOrigin for the CDN attempt — same-origin proxy
+        // doesn't need it and avoids tainting the canvas.
+        if (!isFallback && videoUrl) {
+            video.crossOrigin = 'anonymous';
+        }
         video.muted = true;
         video.preload = 'auto';
         video.src = url;
@@ -64,7 +70,7 @@ window.generateVideoThumbnail = function (element, mediaId, videoUrl) {
                 canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
                 canvas.toBlob(function (blob) {
                     if (!blob) {
-                        if (!isFallback) captureFrame(proxyUrl, false, true);
+                        if (!isFallback) captureFrame(proxyUrl, true);
                         return;
                     }
                     var reader = new FileReader();
@@ -72,14 +78,19 @@ window.generateVideoThumbnail = function (element, mediaId, videoUrl) {
                     reader.readAsDataURL(blob);
                 }, 'image/jpeg', 0.8);
             } catch (e) {
-                if (!isFallback) captureFrame(proxyUrl, false, true);
+                if (!isFallback) captureFrame(proxyUrl, true);
             }
         });
 
         video.addEventListener('error', function () {
-            if (!isFallback) captureFrame(proxyUrl, false, true);
+            if (!isFallback) captureFrame(proxyUrl, true);
         });
     }
 
-    captureFrame(videoUrl, true, false);
+    // Try CDN URL first (faster), fall back to same-origin proxy.
+    if (videoUrl) {
+        captureFrame(videoUrl, false);
+    } else {
+        captureFrame(proxyUrl, true);
+    }
 };
