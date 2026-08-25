@@ -5,7 +5,7 @@
         && blank($record->curations['video_thumbnail'] ?? null);
 @endphp
 
-<div {{ $attributes->merge($getExtraAttributes())->class(['curator-grid-column absolute inset-0 rounded-t-xl overflow-hidden']) }}
+<div {{ $attributes->merge($getExtraAttributes())->class(['curator-grid-column relative aspect-square rounded-t-xl overflow-hidden']) }}
     @if ($needsThumbnail)
         x-data="{ mediaName: @js($record->name), videoUrl: @js($record->url) }"
         x-init="window.generateVideoThumbnail?.($el, mediaName, videoUrl)"
