@@ -121,6 +121,30 @@ Bulunan ve düzeltilen iki GERÇEK bug (commit 95155fa):
 Ders: "TryPost'un agresif ayarlarını alma" kararı tek platform için doğruydu
 ama video poll bütçesiyle birlikte değerlendirilmeliydi.
 
+## Gerçek veriyle teşhis + video önizleme fix'i (yolo turu 6)
+
+### Token 190 teşhisi (kod hatası DEĞİL)
+Gerçek publishte görülen `code:190 Cannot parse access token` tek bir kod
+sorunu değil **veri** sorunu: yayınların çoğu önceki smoke testlerinden kalma
+SAHTE InstagramAccount'lara bağlıymış:
+- hesap 4 → ig_user_id `195746`, token `"tok"` (3 char!) → /content_publishing_limit
+  bu yüzden "Cannot parse token" döndürüyordu.
+- hesap 5/6/8 → token `"account-token"` (sahte).
+- **GERÇEK hesap yalnızca id 3** (`IGAAWfc0...`, 160 char, expires 2026-10-20):
+  pub'lar 5-8 gerçek token'la BAŞARIYLA yayınlandı.
+Sonuç: Kod doğru; gerçek Reel yayını için dosyalama **hesap 3'e** yapılmalı,
+sahte hesaplara değil. (Sahte hesaplar local dev smoke testi kalıntısı.)
+
+### Video önizleme fix'i (GERÇEK kod bug'ı, commit bu tur)
+`App\Models\Media::mediumUrl()/largeUrl()` video için Curator'un çalışan public
+URL'sini ezip `route('media.video')` (lokal proxy → R2 stream) döndürüyordu;
+HTML5 `<video>` Range/seek isteğini karşılayamadığı için "video açılmıyor".
+- Fix: `videoPlayableUrl()` — public disklerde medyanın public `url`'ini
+  döndür (R2/r2.dev), non-public diskte proxy rotasına düş.
+- Doğrulama: content 13 Reel payload `video_url` =
+  `https://pub-... .r2.dev/media/reel-test.mp4` (public, Instagram erişebilir) ✓
+- Testler: TenantMediaTest video davranışı public/private dallarına bölündü.
+
 ## Kural Notları
 - TryPost AGPL-3.0: yalnızca desen esinlenmesi, kod kopyalamak yok.
 - Her değişiklik: `vendor/bin/pint --dirty` + ayrı commit.

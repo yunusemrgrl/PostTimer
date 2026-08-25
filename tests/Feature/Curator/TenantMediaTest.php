@@ -135,7 +135,7 @@ it('exposes the url accessor and required columns on a stored media record', fun
         ->and($queried->url)->toBe(Storage::disk('public')->url($path));
 });
 
-it('uses direct video and thumbnail routes for video media previews', function () {
+it('uses the direct public URL for video previews on public disks', function () {
     $media = Media::factory()->for($this->team)->create([
         'disk' => 'public',
         'name' => 'video-file',
@@ -147,7 +147,28 @@ it('uses direct video and thumbnail routes for video media previews', function (
         ],
     ]);
 
+    $publicUrl = Storage::disk('public')->url($media->path);
+
     expect($media->thumbnail_url)->toBe(route('media.thumbnail', ['media' => 'video-file']))
-        ->and($media->medium_url)->toBe(route('media.video', ['media' => 'video-file']))
-        ->and($media->large_url)->toBe(route('media.video', ['media' => 'video-file']));
+        ->and($media->medium_url)->toBe($publicUrl)
+        ->and($media->large_url)->toBe($publicUrl);
+});
+
+it('falls back to the proxy route for video previews on non-public disks', function () {
+    $media = Media::factory()->for($this->team)->create([
+        'disk' => 'local',
+        'name' => 'video-private',
+        'path' => 'media/video-private.mp4',
+        'ext' => 'mp4',
+        'type' => 'video/mp4',
+        'visibility' => 'private',
+        'curations' => [
+            'video_thumbnail' => 'media/video-private-thumbnail.jpg',
+        ],
+    ]);
+
+    $proxy = route('media.video', ['media' => 'video-private']);
+
+    expect($media->medium_url)->toBe($proxy)
+        ->and($media->large_url)->toBe($proxy);
 });

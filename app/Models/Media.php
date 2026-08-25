@@ -91,7 +91,7 @@ class Media extends \Awcodes\Curator\Models\Media
     {
         return Attribute::make(
             get: fn (): string => curator()->isVideo($this->ext)
-                ? route('media.video', ['media' => $this->name])
+                ? $this->videoPlayableUrl()
                 : Curator::getUrlProvider()::getMediumUrl($this->path),
         );
     }
@@ -100,8 +100,29 @@ class Media extends \Awcodes\Curator\Models\Media
     {
         return Attribute::make(
             get: fn (): string => curator()->isVideo($this->ext)
-                ? route('media.video', ['media' => $this->name])
+                ? $this->videoPlayableUrl()
                 : Curator::getUrlProvider()::getLargeUrl($this->path),
         );
+    }
+
+    /**
+     * Video için oynatılabilir bir URL üretir.
+     *
+     * Public disklerde (R2/S3 custom domain veya r2.dev) medyanın kendi
+     * public URL'si kullanılır; bu URL, tarayıcı video oynatıcısının
+     * ihtiyaç duyduğu Range/seek isteklerini doğrudan karşılar.
+     *
+     * Disk public değilse, uygulama üzerinden stream eden
+     * `media.video` proxy rotasına düşülür.
+     */
+    protected function videoPlayableUrl(): string
+    {
+        $config = config("filesystems.disks.{$this->disk}", []);
+
+        if (($config['visibility'] ?? null) === 'public' || $this->visibility === 'public') {
+            return (string) $this->url;
+        }
+
+        return route('media.video', ['media' => $this->name]);
     }
 }
