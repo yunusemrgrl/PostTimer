@@ -7,4 +7,5 @@ use Laravel\Mcp\Facades\Mcp;
 // GÜVENLİK NOTU: production'da kimlik doğrulama middleware'i eklenmelidir
 // (Mcp::web üçüncü parametresi middleware kabul eder).
 Mcp::web('mcp/publications', PublicationServer::class)
-    ->name('mcp.publications');
+    ->name('mcp.publications')
+    ->middleware([\App\Http\Middleware\EnsureMcpToken::class]);

@@ -9,4 +9,10 @@ return [
      */
     'ffmpeg_binary' => env('FFMPEG_BINARY', 'ffmpeg'),
 
+    /*
+     * MCP endpoint token kapısı. MCP_TOKEN set edilirse /mcp/* istekleri
+     * X-Mcp-Token header'ıyla eşleşmek zorunda; boşsa (local) serbest.
+     */
+    'mcp_token' => env('MCP_TOKEN'),
+
 ];
