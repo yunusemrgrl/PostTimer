@@ -57,7 +57,56 @@ Queue sürücümüz `database`; Horizon yalnızca Redis'te çalışır. Tek sunu
 düşük job hacmi için database queue + supervisor yeterli. Redis'e geçilirse
 (yük/çok worker) tekrar değerlendirilecek.
 
-## Geriye Dönük Denetim (yolo turu 4)
+## Gerçek Reel Yayını — Uçtan Uca Doğrulama (yolo turu 5)
+
+### Form karşılaştırması (ContentForm vs eski InstagramPostForm)
+CuratorPicker kullanımı BİREBİR AYNI desen (afterStateHydrated ile URL→medya
+geri yükleme, dehydrateStateUsing ile Media::resolveUrl → public URL).
+VIDEO tipinde acceptedFileTypes video/* ✓. Kod değişikliği GEREKMEDİ.
+
+### Zincir doğrulaması (sahte Graph API ile gerçek akış)
+`_e2e_reel.php` simülasyonu (scheduler komutu + job handle + Http::fake):
+- Content(VIDEO+REELS) → InstagramMediaFactory → **ReelMedia** ✓
+- REELS container payload `video_url` = content.media_url =
+  **R2 public r2.dev URL** ✓ (CURATOR_DEFAULT_DISK=r2, R2_URL set)
+- Container status poll: FINISHED döndüğünde media_publish'e geçiyor ✓
+- Sonuç: status=**published**, container_id/media_id/permalink dolu ✓
+- Worker transport: `queue:work --once` gerçek PublishScheduledPublication'ı
+  RUNNING→DONE çalıştırdı; boş kuyrukta closure job da işlendi (PASS) ✓
+
+### Düzeltilen blocking bug (önceki tur, 95155fa)
+Job timeout 85sn < video poll bütçesi ~300sn → video yayını kesiliyordu.
+timeout=420, uniqueFor=1800, queue retry_after=900.
+
+## GERÇEK Reel Yayın Testi — Runbook
+
+Ön şartlar:
+1. `.env`: R2_URL public r2.dev alan adı olmalı (mevcut ✓), gerçek IG hesabı
+   bağlı olmalı (token geçerli), `QUEUE_CONNECTION=database`,
+   supervisor/worker çalışıyor olmalı (`php artisan queue:work`).
+2. Sunucudan `curl -I <video_r2_url>` → 200 ve content-type video/mp4
+   (Instagram'ın erişimi için public olmalı).
+
+Adımlar:
+1. App paneli → Contents → Yeni:
+   - Tür = VIDEO, Yüzey = REELS
+   - Curator'dan mp4 seç, caption + first_comment doldur
+   - Kaydet → content_id not al
+2. PublicationsRelationManager'dan hedef hesaba dağıt (scheduled_at = +5 dk)
+3. `scheduled_at` gelince worker otomatik yayınlar. İzleme:
+   - `publications:health`
+   - `storage/logs/publish-flow.log` (flow_id bazlı tüm adımlar)
+
+Beklenen Publication durum makinesi:
+```
+scheduled → publishing → published      (mutlu yol)
+scheduled → publishing → (retry ×2)     → published        (geçici hata)
+scheduled → publishing → failed         (kota/token/kalıcı hata;
+                                         Telegram "Yayın Başarısız")
+scheduled → flagged                     (bağlantı/stok kontrolü uyarısı)
+publishing (>1 saat)     → failed       (recover-stuck devreye girer;
+                                         media_id varsa asla FAILED'e çekilmez)
+```
 
 Bulunan ve düzeltilen iki GERÇEK bug (commit 95155fa):
 1. **Video yayın timeout uyumsuzluğu:** Job timeout 85 sn, video container
