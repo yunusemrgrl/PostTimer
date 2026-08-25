@@ -33,9 +33,9 @@ Sahip: MediaObserver::generateVideoThumbnail
 - [x] Testler: PublicationsHealthTest (healthy/fail-stuck/fail-last-run/cache/output)
 
 ### Sonraki adaylar (henüz planlanmadı)
-- [x] MCP server + `schedule_publication` / `get_publication_status` tool'ları
-      (commit d2dc81f; laravel/mcp ^0.9.4; endpoint `/mcp/publications`;
-      production öncesi auth middleware EKLENMELİ)
+- [x] MCP tool seti: schedule_publication, get_publication_status,
+      create_content, list_publications (commit'ler d2dc81f + bu tur;
+      endpoint `/mcp/publications`; production öncesi auth EKLENMELİ)
 - [ ] MCP tool testleri (yolo fazı sonrası dengelemede)
 - [ ] URL-import medya feature'ı (SafeHttpFetcher/SSRF katmanıyla birlikte)
 - [ ] Horizon değerlendirmesi (yük kanıtlandığında)
