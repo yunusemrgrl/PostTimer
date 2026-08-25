@@ -81,11 +81,19 @@ timeout=420, uniqueFor=1800, queue retry_after=900.
 ## GERÇEK Reel Yayın Testi — Runbook
 
 Ön şartlar:
-1. `.env`: R2_URL public r2.dev alan adı olmalı (mevcut ✓), gerçek IG hesabı
-   bağlı olmalı (token geçerli), `QUEUE_CONNECTION=database`,
+1. `.env`: **R2_URL bir CUSTOM DOMAIN olmalı** (örn. `https://media.postimer.com`),
+   ASLA `.r2.dev` test alan adı. r2.dev yönetilen public adresi variabil
+   rate-limit + bant genişliği throttle uygular; büyük videoyu hem tarayıcı
+   (Range/seek) hem Instagram Graph API indirmede (`waitForContainerToFinish`
+   IN_PROGRESS'ta kilitleyebilir) takıyor. Custom domain: Cloudflare Dashboard
+   → R2 → bucket → Settings → Public Access → Custom Domains (+ DNS'te CNAME,
+   **turuncu bulut CDN proxy AÇIK** olmalı). Gerçek IG hesabı bağlı olmalı
+   (token geçerli), `QUEUE_CONNECTION=database`,
    supervisor/worker çalışıyor olmalı (`php artisan queue:work`).
-2. Sunucudan `curl -I <video_r2_url>` → 200 ve content-type video/mp4
-   (Instagram'ın erişimi için public olmalı).
+2. Custom domain kurulunca: `curl -I <video_url>` → **`206 Partial Content`** ve
+   `content-type video/mp4` döndürmeli (restricted 200 ve Range desteği).
+   Network sekmesinde de `206` görülmeli. `.r2.dev`'de 200/slow/connection-reset
+   görürsen bu throttle'ın işaretidir — custom domain şarttır.
 
 Adımlar:
 1. App paneli → Contents → Yeni:
@@ -144,6 +152,23 @@ HTML5 `<video>` Range/seek isteğini karşılayamadığı için "video açılmı
 - Doğrulama: content 13 Reel payload `video_url` =
   `https://pub-... .r2.dev/media/reel-test.mp4` (public, Instagram erişebilir) ✓
 - Testler: TenantMediaTest video davranışı public/private dallarına bölündü.
+
+### Kök neden: r2.dev throttle (altyapı, kod değil) — tur 7
+Fix, video önizlemesini public `.r2.dev` URL'sine taşıyınca gerçek kök neden
+ortaya çıktı: `R2_URL=https://pub-... .r2.dev` Cloudflare'in **yönetilen test**
+alan adı — variabil rate-limit + bant genişliği throttle uygular. Semptomlar:
+- `Range: bytes=0-` isteği 22s asılı → `net::ERR_CONNECTION_RESET`, 0 byte.
+- Küçük statikler (thumbnail) takılmaz, büyük/streaming dosya (5.87 MB mp4)
+  throttle'a çarpar → video açılmıyor.
+- **Kritik:** Aynı `R2_URL` tabanı Instagram'a giden `video_url/image_url` için
+  de kullanılıyor (config `'url' => env('R2_URL')` → tüm URL üretimi tek
+  kaynak). Meta `waitForContainerToFinish()`'te bu URL'den indirirken throttle
+  olursa container IN_PROGRESS'ta kalabilir → gerçek yayın riski.
+Çözüm: bucket'a custom domain bağla (DNS + **CDN proxy turuncu bulut AÇIK**),
+sonra `.env`'te `R2_URL=https://media.postimer.com`. KOD DEĞİŞİKLİĞİ GEREKMEZ —
+tüm zincir `R2_URL` env'den türer; hardcode yok. `Media::findByPublicUrl()`
+host'tan bağımsız path eşleştiği için eski kayıtlar da açılmaya devam eder.
+Doğrulama: `curl -I <video_url>` → **206 Partial Content** + Range/seek desteti.
 
 ## Kural Notları
 - TryPost AGPL-3.0: yalnızca desen esinlenmesi, kod kopyalamak yok.
