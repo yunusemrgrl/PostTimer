@@ -22,9 +22,8 @@
             icon-classes="size-24"
             x-on:click="toggleSelectedRecord('{{ $record->id }}')"
             @class([
-                'h-full',
-                'w-auto mx-auto p-2' => $isSvg,
-                'w-full' => ! $isSvg,
+                'h-full w-full object-cover',
+                'p-2' => $isSvg,
             ])
         />
         <x-curator::display.info-overlay :label="$record->pretty_name" :size="$record->size" />

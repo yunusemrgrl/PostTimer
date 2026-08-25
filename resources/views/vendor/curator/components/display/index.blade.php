@@ -28,11 +28,10 @@
         loading="{{ $lazy ? 'lazy' : 'eager' }}"
         {{
             $attributes
-                ->merge(['width' => $item->width, 'height' => $item->height])
-                ->except(['src', 'alt', 'lazy', 'item'])
+                ->except(['src', 'alt', 'lazy', 'item', 'width', 'height'])
                 ->class([
-                    'object-cover' => ! $constrained,
-                    'object-contain' => $constrained,
+                    'h-full w-full object-cover' => ! $constrained,
+                    'h-full w-full object-contain' => $constrained,
                 ])
         }}
     />
@@ -46,7 +45,11 @@
             poster="{{ $poster }}"
         @endif
         preload="{{ $lazy ? 'none' : 'auto' }}"
-        {{ $attributes->except(['src', 'controls', 'lazy', 'item', 'poster']) }}
+        {{
+            $attributes
+                ->except(['src', 'controls', 'lazy', 'item', 'poster', 'width', 'height'])
+                ->class(['h-full w-full object-cover'])
+        }}
     ></video>
 @elseif (curator()->isVideo($item->ext) && filled($poster))
     <img
@@ -55,11 +58,10 @@
         loading="{{ $lazy ? 'lazy' : 'eager' }}"
         {{
             $attributes
-                ->merge(['width' => $item->width, 'height' => $item->height])
-                ->except(['src', 'alt', 'lazy', 'item', 'poster'])
+                ->except(['src', 'alt', 'lazy', 'item', 'poster', 'width', 'height'])
                 ->class([
-                    'object-cover' => ! $constrained,
-                    'object-contain' => $constrained,
+                    'h-full w-full object-cover' => ! $constrained,
+                    'h-full w-full object-contain' => $constrained,
                 ])
         }}
     />

@@ -182,8 +182,7 @@
                                 :src="$file['thumbnail_url']"
                                 :alt="$file['alt'] ?? ''"
                                 icon-classes="size-12"
-                                width="200"
-                                height="200"
+                                class="h-full w-full object-cover"
                             />
                         </button>
 
