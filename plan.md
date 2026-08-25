@@ -37,7 +37,8 @@ Sahip: MediaObserver::generateVideoThumbnail
       create_content, list_publications (commit'ler d2dc81f + bu tur;
       endpoint `/mcp/publications`; production öncesi auth EKLENMELİ)
 - [ ] MCP tool testleri (yolo fazı sonrası dengelemede)
-- [ ] URL-import medya feature'ı (SafeHttpFetcher/SSRF katmanıyla birlikte)
+- [x] URL-import medya feature'ı — SafeHttpFetcher (SSRF guard) +
+      MediaUrlImporter + `import_media_from_url` MCP tool'u (commit dcbdb38)
 - [ ] Horizon değerlendirmesi (yük kanıtlandığında)
 
 ## Kural Notları
