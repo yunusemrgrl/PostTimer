@@ -22,8 +22,12 @@ Route::post('/telegram/webhook', [TelegramWebhookController::class, 'webhook'])
 Route::get('/media/{media:name}/thumbnail', [MediaThumbnailController::class, 'show'])
     ->name('media.thumbnail');
 
+Route::post('/media/{media:name}/thumbnail', [MediaThumbnailController::class, 'store'])
+    ->middleware(['auth', 'throttle:10,1'])
+    ->name('media.thumbnail.store');
+
 Route::get('/media/{media:name}/video', [MediaThumbnailController::class, 'video'])
     ->name('media.video');
 
-// MCP sunucusu (laravel/mcp) — ayrýntýlar: routes/ai.php
+// MCP sunucusu (laravel/mcp) ï¿½ ayrï¿½ntï¿½lar: routes/ai.php
 require __DIR__.'/ai.php';

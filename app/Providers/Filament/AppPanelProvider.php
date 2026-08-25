@@ -12,6 +12,7 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -68,6 +69,10 @@ class AppPanelProvider extends PanelProvider
             ])
             ->plugins([
                 CuratorPlugin::make(),
-            ]);
+            ])
+            ->renderHook(
+                PanelsRenderHook::SCRIPTS_AFTER,
+                fn (): string => '<script>'.file_get_contents(resource_path('js/video-thumbnail.js')).'</script>'
+            );
     }
 }

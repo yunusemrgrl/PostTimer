@@ -62,8 +62,10 @@ it('renders video thumbnails as image previews and player posters in the browser
     Storage::disk('r2')->put('media/preview-video.mp4', 'video-content');
     Storage::disk('r2')->put('media/preview-video-thumbnail.jpg', 'thumbnail-content');
 
-    $thumbnailPath = parse_url(route('media.thumbnail', ['media' => 'preview-video']), PHP_URL_PATH);
-    $videoPath = parse_url(route('media.video', ['media' => 'preview-video']), PHP_URL_PATH);
+    $thumbnailUrl = Storage::disk('r2')->url('media/preview-video-thumbnail.jpg');
+    $videoUrl = Storage::disk('r2')->url('media/preview-video.mp4');
+    $thumbnailPath = parse_url($thumbnailUrl, PHP_URL_PATH);
+    $videoPath = parse_url($videoUrl, PHP_URL_PATH);
 
     $page = visit('/__tests/curator-video-preview/'.$media->id);
 

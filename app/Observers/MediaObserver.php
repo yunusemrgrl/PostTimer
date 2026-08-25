@@ -3,10 +3,8 @@
 namespace App\Observers;
 
 use App\Models\Media;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\Process\Process;
 
 class MediaObserver
 {
@@ -45,46 +43,19 @@ class MediaObserver
             return;
         }
 
-        // Sadece videolar için thumbnail üret.
-        if (! curator()->isVideo($media->ext)) {
-            return;
-        }
-
-        try {
-            $this->generateVideoThumbnail($media);
-        } catch (\Throwable $e) {
-            $this->markThumbnailStatus($media, 'failed', $e->getMessage());
-
-            Log::error('VIDEO THUMBNAIL OLUŞTURULAMADI', [
-                'media_id' => $media->id,
-                'error' => $e->getMessage(),
-            ]);
+        // Videolar için thumbnail'i 'pending' olarak işaretle —
+        // client-side JS (canvas) galeri/listeleme görüntülendiğinde
+        // thumbnail'i üretip POST /media/{id}/thumbnail endpoint'ine
+        // gönderecektir. Server-side FFmpeg bağımlılığı yoktur.
+        if (curator()->isVideo($media->ext)) {
+            $this->markThumbnailStatus($media, 'pending');
         }
     }
 
     /**
-     * FFmpeg'in sistemde mevcut olup olmadığını günlük cache ile tespit eder.
-     * Binary yolu config'den gelir (testlerde kolayca değiştirilebilir).
-     */
-    private function ffmpegAvailable(): bool
-    {
-        return Cache::remember('curator:ffmpeg-available', now()->addDay(), function (): bool {
-            $binary = (string) config('media.ffmpeg_binary', 'ffmpeg');
-
-            $finder = windows_os()
-                ? new Process(['where', $binary])
-                : new Process(['which', $binary]);
-
-            $finder->run();
-
-            return $finder->isSuccessful();
-        });
-    }
-
-    /**
-     * Thumbnail üretim durumunu curations JSON'una işler: 'ok',
-     * 'ffmpeg_missing' veya 'failed'. UI, thumbnailUrl() null döndüğünde
-     * nedeni buradan bilebilir.
+     * Thumbnail üretim durumunu curations JSON'una işler: 'pending',
+     * 'ok' veya 'failed'. UI, thumbnailUrl() null döndüğünde nedeni
+     * buradan bilebilir.
      */
     private function markThumbnailStatus(Media $media, string $status, ?string $error = null): void
     {
@@ -150,139 +121,6 @@ class MediaObserver
         $media->deleteQuietly();
 
         return true;
-    }
-
-    private function generateVideoThumbnail(Media $media): void
-    {
-        // FFmpeg yoksa sessizce atla ama nedeni kalıcı olarak işaretle —
-        // her yayın için tekrar tekrar deneme yapılmaz.
-        if (! $this->ffmpegAvailable()) {
-            $this->markThumbnailStatus($media, 'ffmpeg_missing');
-
-            Log::warning('VIDEO THUMBNAIL ATLANDI: ffmpeg bulunamadı', [
-                'media_id' => $media->id,
-            ]);
-
-            return;
-        }
-
-        $disk = Storage::disk($media->disk);
-
-        // Geçici dosyalar.
-        $tempVideo = tempnam(sys_get_temp_dir(), 'curator-video-').'.mp4';
-        $tempThumbnail = tempnam(sys_get_temp_dir(), 'curator-thumb-').'.jpg';
-
-        try {
-            /*
-             * R2'den videoyu stream ederek local geçici dosyaya indiriyoruz;
-             * bütün videoyu PHP memory'sine almamak için stream kopyalama.
-             */
-            $stream = $disk->readStream($media->path);
-
-            if ($stream === false) {
-                throw new \RuntimeException('Video R2 üzerinden okunamadı.');
-            }
-
-            $target = fopen($tempVideo, 'wb');
-
-            if ($target === false) {
-                fclose($stream);
-
-                throw new \RuntimeException('Geçici video dosyası oluşturulamadı.');
-            }
-
-            stream_copy_to_stream($stream, $target);
-
-            fclose($stream);
-            fclose($target);
-
-            /*
-             * FFmpeg: 1. saniyeye git, 1 frame al, JPEG olarak kaydet.
-             */
-            $process = new Process([
-                (string) config('media.ffmpeg_binary', 'ffmpeg'),
-                '-y',
-                '-ss',
-                '1',
-                '-i',
-                $tempVideo,
-                '-frames:v',
-                '1',
-                '-q:v',
-                '2',
-                $tempThumbnail,
-            ]);
-
-            $process->setTimeout(60);
-            $process->run();
-
-            if (! $process->isSuccessful()
-                || ! file_exists($tempThumbnail)
-                || filesize($tempThumbnail) === 0
-            ) {
-                throw new \RuntimeException(
-                    'FFmpeg thumbnail oluşturamadı: '.$process->getErrorOutput()
-                );
-            }
-
-            /*
-             * Thumbnail'ı videonun dizininden ayrı, config'de tanımlı
-             * `thumbnails_directory` (default: media_thumbnails) klasörüne
-             * koyuyoruz; medya hiyerarşisindeki `media` segmenti
-             * değiştirilir. Durum curations JSON'una işlenir.
-             */
-            $thumbnailsDirectory = (string) config('media.thumbnails_directory', 'media_thumbnails');
-
-            $thumbnailDir = preg_replace(
-                '#/media/#',
-                '/'.$thumbnailsDirectory.'/',
-                $media->directory,
-                1
-            ) ?? $media->directory;
-
-            $thumbnailPath = $thumbnailDir.'/'.$media->name.'-thumbnail.jpg';
-
-            $thumbnailStream = fopen($tempThumbnail, 'rb');
-
-            if ($thumbnailStream === false) {
-                throw new \RuntimeException('Thumbnail dosyası okunamadı.');
-            }
-
-            $disk->put(
-                $thumbnailPath,
-                $thumbnailStream,
-                [
-                    'visibility' => 'public',
-                    'ContentType' => 'image/jpeg',
-                ]
-            );
-
-            fclose($thumbnailStream);
-
-            $curations = $media->curations ?? [];
-
-            $curations['video_thumbnail'] = $thumbnailPath;
-            $curations['thumbnail_status'] = 'ok';
-            unset($curations['thumbnail_error']);
-
-            $media->curations = $curations;
-
-            // Observer tekrar created() tetiklemez.
-            $media->saveQuietly();
-
-            Log::info('VIDEO THUMBNAIL OLUŞTURULDU', [
-                'media_id' => $media->id,
-                'thumbnail_path' => $thumbnailPath,
-            ]);
-        } finally {
-            if (file_exists($tempVideo)) {
-                @unlink($tempVideo);
-            }
-
-            if (file_exists($tempThumbnail)) {
-                @unlink($tempThumbnail);
-            }
-        }
     }
 
     public function updated(Media $media): void

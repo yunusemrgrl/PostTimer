@@ -157,9 +157,17 @@
                     @endforeach
                 @endif
                 @forelse ($files as $file)
+                    @php
+                        $fileNeedsThumbnail = curator()->isVideo($file['ext'] ?? '')
+                            && blank($file['curations']['video_thumbnail'] ?? null);
+                    @endphp
                     <li
                         wire:key="media-{{ $file['id'] }}"
                         class="relative aspect-square group"
+                        @if ($fileNeedsThumbnail)
+                            x-data="{ mediaId: {{ $file['id'] }}, videoUrl: {{ js($file['url'] ?? '') }} }"
+                            x-init="window.generateVideoThumbnail?.($el, mediaId, videoUrl)"
+                        @endif
                     >
                         <button
                             type="button"

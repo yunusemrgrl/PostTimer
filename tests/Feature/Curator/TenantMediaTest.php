@@ -148,8 +148,9 @@ it('uses the direct public URL for video previews on public disks', function () 
     ]);
 
     $publicUrl = Storage::disk('public')->url($media->path);
+    $thumbnailUrl = Storage::disk('public')->url('media/video-file-thumbnail.jpg');
 
-    expect($media->thumbnail_url)->toBe(route('media.thumbnail', ['media' => 'video-file']))
+    expect($media->thumbnail_url)->toBe($thumbnailUrl)
         ->and($media->medium_url)->toBe($publicUrl)
         ->and($media->large_url)->toBe($publicUrl);
 });
@@ -168,7 +169,9 @@ it('falls back to the proxy route for video previews on non-public disks', funct
     ]);
 
     $proxy = route('media.video', ['media' => 'video-private']);
+    $thumbnailProxy = route('media.thumbnail', ['media' => 'video-private']);
 
-    expect($media->medium_url)->toBe($proxy)
+    expect($media->thumbnail_url)->toBe($thumbnailProxy)
+        ->and($media->medium_url)->toBe($proxy)
         ->and($media->large_url)->toBe($proxy);
 });

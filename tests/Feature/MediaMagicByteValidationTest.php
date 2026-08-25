@@ -22,7 +22,7 @@ function mediaOnDisk(string $ext, string $bytes, array $attributes = []): Media
 }
 
 beforeEach(function () {
-    // Video thumbnail ffmpeg'e ihtiyaç duymasın diye HTTP/disk fake'lenir.
+    // Observer side-effect'leri (magic-byte okuma) için disk fake'lenir.
     Http::fake(['*' => Http::response()]);
     Storage::fake('public');
 });

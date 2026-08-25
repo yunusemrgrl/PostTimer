@@ -9,6 +9,7 @@ use Database\Factories\MediaFactory;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 
 class Media extends \Awcodes\Curator\Models\Media
 {
@@ -77,9 +78,19 @@ class Media extends \Awcodes\Curator\Models\Media
         return Attribute::make(
             get: function (): ?string {
                 if (curator()->isVideo($this->ext)) {
-                    return filled($this->curations['video_thumbnail'] ?? null)
-                        ? route('media.thumbnail', ['media' => $this->name])
-                        : null;
+                    $thumbnailPath = $this->curations['video_thumbnail'] ?? null;
+
+                    if (! filled($thumbnailPath)) {
+                        return null;
+                    }
+
+                    $config = config("filesystems.disks.{$this->disk}", []);
+
+                    if (($config['visibility'] ?? null) === 'public' || $this->visibility === 'public') {
+                        return (string) Storage::disk($this->disk)->url($thumbnailPath);
+                    }
+
+                    return route('media.thumbnail', ['media' => $this->name]);
                 }
 
                 return Curator::getUrlProvider()::getThumbnailUrl($this->path);

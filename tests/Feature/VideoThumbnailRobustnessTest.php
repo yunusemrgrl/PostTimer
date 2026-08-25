@@ -1,8 +1,8 @@
 <?php
 
 use App\Models\Media;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
@@ -27,34 +27,34 @@ function videoMediaOnDisk(): Media
 beforeEach(function () {
     Http::fake(['*' => Http::response()]);
     Storage::fake('public');
-    Cache::flush();
-    config(['media.ffmpeg_binary' => 'definitely-missing-ffmpeg-binary']);
 });
 
-it('marks the thumbnail as ffmpeg_missing when the binary does not exist', function () {
+it('marks the thumbnail as pending on creation for client-side generation', function () {
     $media = videoMediaOnDisk();
 
     expect($media->fresh()->curations)
-        ->thumbnail_status->toBe('ffmpeg_missing')
+        ->thumbnail_status->toBe('pending')
         ->video_thumbnail->toBeNull();
 });
 
-it('caches the ffmpeg availability probe', function () {
+it('does not attempt server-side ffmpeg processing', function () {
     $media = videoMediaOnDisk();
 
-    // İlk media probe çalıştırır ve sonucu cache'ler.
-    expect($media->fresh()->curations['thumbnail_status'])->toBe('ffmpeg_missing');
-    expect(Cache::get('curator:ffmpeg-available'))->toBeFalse();
+    // No ffmpeg probe, no failed status — just pending
+    expect($media->fresh()->curations['thumbnail_status'])->toBe('pending');
+});
 
-    // İkinci video: probe tekrar ÇALIŞMAMALI (cache). Bunu doğrulamanın
-    // kolay yolu: cache değeri true'ya çevrilirse bile binary hâlâ yok —
-    // ama observer cache'e güvenir ve thumbnail denemesi yapmaz (hata olmaz).
-    Cache::put('curator:ffmpeg-available', true, now()->addDay());
-    config(['media.ffmpeg_binary' => 'definitely-missing-ffmpeg-binary']);
+it('stores a client-uploaded thumbnail via the POST endpoint', function () {
+    $media = videoMediaOnDisk();
 
-    $second = videoMediaOnDisk();
+    $base64 = 'data:image/jpeg;base64,'.base64_encode("\xFF\xD8\xFF\xE0");
 
-    // Cache true dediği için üretim denenir; ffmpeg gerçekten olmadığından
-    // process başarısız olur → 'failed' işaretlenir (ffmpeg_missing DEĞİL).
-    expect($second->fresh()->curations['thumbnail_status'])->toBe('failed');
+    $this->actingAs($media->team->owner ?? User::factory()->create())
+        ->postJson("/media/{$media->name}/thumbnail", ['thumbnail' => $base64])
+        ->assertOk()
+        ->assertJsonStructure(['thumbnail_url']);
+
+    expect($media->fresh()->curations)
+        ->thumbnail_status->toBe('ok')
+        ->video_thumbnail->not->toBeNull();
 });
