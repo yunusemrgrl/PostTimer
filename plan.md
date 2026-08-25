@@ -41,6 +41,21 @@ Sahip: MediaObserver::generateVideoThumbnail
       MediaUrlImporter + `import_media_from_url` MCP tool'u (commit dcbdb38)
 - [ ] Horizon değerlendirmesi (yük kanıtlandığında)
 
+## Geriye Dönük Denetim (yolo turu 4)
+
+Bulunan ve düzeltilen iki GERÇEK bug (commit 95155fa):
+1. **Video yayın timeout uyumsuzluğu:** Job timeout 85 sn, video container
+   poll bütçesi ≈300 sn → her video yayını worker tarafından kesilip 1 saat
+   sonra recover-stuck tarafından haksızca FAILED'e çekiliyordu.
+   → `timeout=420`, `uniqueFor=1800` (TryPost'un "poll headroom" gerekçesi
+   video ayakları için doğruymuş).
+2. **Queue çift-koşu riski:** Aktif `database` queue `retry_after=90` <
+   yeni timeout 420 → uzun video job'u ikinci worker'da yeniden başlayıp
+   ÇİFT YAYIN yapabilirdi. → DB/Redis `retry_after` default 900.
+
+Ders: "TryPost'un agresif ayarlarını alma" kararı tek platform için doğruydu
+ama video poll bütçesiyle birlikte değerlendirilmeliydi.
+
 ## Kural Notları
 - TryPost AGPL-3.0: yalnızca desen esinlenmesi, kod kopyalamak yok.
 - Her değişiklik: `vendor/bin/pint --dirty` + ayrı commit.
