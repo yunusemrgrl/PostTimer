@@ -13,6 +13,7 @@ use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Assets\Js;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -72,6 +73,28 @@ class AppPanelProvider extends PanelProvider
             ])
             ->assets([
                 Js::make('video-thumbnail', resource_path('js/video-thumbnail.js')),
-            ]);
+            ])
+            ->renderHook(
+                PanelsRenderHook::STYLES_AFTER,
+                fn (): string => '<style>
+                    .fi-ta-content-grid {
+                        display: flex !important;
+                        flex-wrap: nowrap !important;
+                        overflow-x: auto;
+                        scroll-snap-type: x mandatory;
+                        gap: 1rem;
+                        padding: 0 0 1rem 0;
+                        --cols-default: auto !important;
+                        --cols-md: auto !important;
+                        --cols-lg: auto !important;
+                        --cols-xl: auto !important;
+                    }
+                    .fi-ta-content-grid > [role="listitem"] {
+                        flex: 0 0 220px !important;
+                        scroll-snap-align: start;
+                        scroll-snap-stop: always;
+                    }
+                </style>'
+            );
     }
 }
