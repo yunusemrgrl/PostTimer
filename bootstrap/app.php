@@ -20,8 +20,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Telegram webhook'u CSRF'ten muaftır: istekler bot'tan gelir, CSRF token göndermez.
         // Tek bot → tek endpoint; güvenlik, rastgele `verification_code` eşleşmesiyle sağlanır.
+        // MCP JSON-RPC endpoint'i de stateless'tır (token auth production'da eklenecek).
         $middleware->validateCsrfTokens(except: [
             'telegram/webhook',
+            'mcp/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

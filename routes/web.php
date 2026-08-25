@@ -24,3 +24,6 @@ Route::get('/media/{media:name}/thumbnail', [MediaThumbnailController::class, 's
 
 Route::get('/media/{media:name}/video', [MediaThumbnailController::class, 'video'])
     ->name('media.video');
+
+// MCP sunucusu (laravel/mcp) — ayrýntýlar: routes/ai.php
+require __DIR__.'/ai.php';

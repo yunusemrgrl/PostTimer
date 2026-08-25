@@ -39,4 +39,7 @@ Sahip: MediaObserver::generateVideoThumbnail
 
 ## Kural Notları
 - TryPost AGPL-3.0: yalnızca desen esinlenmesi, kod kopyalamak yok.
-- Her değişiklik: test + `vendor/bin/pint --dirty` + ayrı commit.
+- Her değişiklik: `vendor/bin/pint --dirty` + ayrı commit.
+- **GEÇİCİ KARAR (kullanıcı talimatı):** Bu aşamada TEST YAZILMAYACAK
+  (yolo mod). Mevcut testler korunur/yeşil tutulur; yeni özellikler için
+  test yazımı sonraki dengeleme fazına ertelendi.
