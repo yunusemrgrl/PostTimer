@@ -41,6 +41,22 @@ Sahip: MediaObserver::generateVideoThumbnail
       MediaUrlImporter + `import_media_from_url` MCP tool'u (commit dcbdb38)
 - [ ] Horizon değerlendirmesi (yük kanıtlandığında)
 
+### [x] O2 — MCP endpoint auth (production ön şartı)
+- [x] `EnsureMcpToken` middleware — `MCP_TOKEN` env set ise `X-Mcp-Token`
+      zorunlu (hash_equals); boşsa local serbest
+- [x] Manuel doğrulama: tokensiz 401 / yanlış 401 / doğru 200
+
+### [x] O3 — Manuel doğrulama turu (tinker/artisan, gerçek çalışma)
+- [x] schedule_publication uçtan uca → Publication scheduled + job DB queue'da
+- [x] recover-stuck → takılı yayın FAILED
+- [x] publications:health → stuck>0 iken FAILURE
+- [x] legacy-migrate guard → dolu tabloda reddediyor (doğru)
+
+### [x] Horizon kararı: ŞİMDİLİK GEREK YOK
+Queue sürücümüz `database`; Horizon yalnızca Redis'te çalışır. Tek sunucu +
+düşük job hacmi için database queue + supervisor yeterli. Redis'e geçilirse
+(yük/çok worker) tekrar değerlendirilecek.
+
 ## Geriye Dönük Denetim (yolo turu 4)
 
 Bulunan ve düzeltilen iki GERÇEK bug (commit 95155fa):
