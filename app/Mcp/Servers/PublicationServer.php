@@ -4,6 +4,7 @@ namespace App\Mcp\Servers;
 
 use App\Mcp\Tools\CreateContentTool;
 use App\Mcp\Tools\GetPublicationStatusTool;
+use App\Mcp\Tools\ImportMediaFromUrlTool;
 use App\Mcp\Tools\ListPublicationsTool;
 use App\Mcp\Tools\SchedulePublicationTool;
 use Laravel\Mcp\Server;
@@ -18,6 +19,7 @@ class PublicationServer extends Server
 {
     protected array $tools = [
         CreateContentTool::class,
+        ImportMediaFromUrlTool::class,
         SchedulePublicationTool::class,
         GetPublicationStatusTool::class,
         ListPublicationsTool::class,
