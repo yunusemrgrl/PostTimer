@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureMcpToken;
 use App\Mcp\Servers\PublicationServer;
 use Laravel\Mcp\Facades\Mcp;
 
@@ -8,4 +9,4 @@ use Laravel\Mcp\Facades\Mcp;
 // (Mcp::web üçüncü parametresi middleware kabul eder).
 Mcp::web('mcp/publications', PublicationServer::class)
     ->name('mcp.publications')
-    ->middleware([\App\Http\Middleware\EnsureMcpToken::class]);
+    ->middleware([EnsureMcpToken::class]);

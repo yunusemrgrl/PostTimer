@@ -115,7 +115,11 @@ class MediaObserver
             return false;
         }
 
-        $stream = Storage::disk($media->disk)->readStream($media->path);
+        try {
+            $stream = Storage::disk($media->disk)->readStream($media->path);
+        } catch (\Throwable $e) {
+            return false;
+        }
 
         if (! is_resource($stream)) {
             return false;
@@ -222,13 +226,21 @@ class MediaObserver
             }
 
             /*
-             * Thumbnail'ı videonun yanında diske koyuyoruz ve durumu
-             * curations JSON'una işliyoruz (yeni migration gerekmez).
+             * Thumbnail'ı videonun dizininden ayrı, config'de tanımlı
+             * `thumbnails_directory` (default: media_thumbnails) klasörüne
+             * koyuyoruz; medya hiyerarşisindeki `media` segmenti
+             * değiştirilir. Durum curations JSON'una işlenir.
              */
-            $thumbnailPath = $media->directory
-                .'/'
-                .$media->name
-                .'-thumbnail.jpg';
+            $thumbnailsDirectory = (string) config('media.thumbnails_directory', 'media_thumbnails');
+
+            $thumbnailDir = preg_replace(
+                '#/media/#',
+                '/'.$thumbnailsDirectory.'/',
+                $media->directory,
+                1
+            ) ?? $media->directory;
+
+            $thumbnailPath = $thumbnailDir.'/'.$media->name.'-thumbnail.jpg';
 
             $thumbnailStream = fopen($tempThumbnail, 'rb');
 
