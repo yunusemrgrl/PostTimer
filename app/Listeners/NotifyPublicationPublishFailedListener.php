@@ -2,8 +2,8 @@
 
 namespace App\Listeners;
 
+use App\Domain\Notification\Services\NotificationService;
 use App\Events\PublicationPublishFailed;
-use App\Services\NotificationService;
 
 /**
  * PublicationPublishFailed event'ini dinler ve Telegram'a yayın başarısız

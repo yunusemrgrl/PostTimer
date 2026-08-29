@@ -2,8 +2,8 @@
 
 namespace App\Listeners;
 
+use App\Domain\Notification\Services\NotificationService;
 use App\Events\PublicationPublished;
-use App\Services\NotificationService;
 
 /**
  * PublicationPublished event'ini dinler ve Telegram'a başarılı yayın

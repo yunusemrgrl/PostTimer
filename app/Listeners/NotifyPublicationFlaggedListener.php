@@ -2,8 +2,8 @@
 
 namespace App\Listeners;
 
+use App\Domain\Notification\Services\NotificationService;
 use App\Events\PublicationFlagged;
-use App\Services\NotificationService;
 
 /**
  * PublicationFlagged event'ini dinler ve Telegram'a stok/fiyat uyarısı
