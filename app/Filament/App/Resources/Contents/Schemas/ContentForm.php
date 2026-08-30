@@ -52,15 +52,23 @@ class ContentForm
                                     ? $state
                                     : $component->getRecord()?->media_url;
 
+                                // Curator picker state'i HER ZAMAN array olmalı —
+                                // aksi halde picker blade count(string) ile çöker.
+                                // URL, Curator DB'de karşılığı olmayan
+                                // (manuel/dış kaynak/legacy) bir kayıtsa state'i
+                                // boş array'e çek; değer kaydedilirken
+                                // dehydrateStateUsing üzerinden korunur.
                                 if (! is_string($url) || $url === '') {
+                                    $component->state([]);
+
                                     return;
                                 }
 
                                 $media = Media::findByPublicUrl($url);
 
-                                if ($media !== null) {
-                                    $component->state([(string) Str::uuid() => $media->toArray()]);
-                                }
+                                $component->state($media !== null
+                                    ? [(string) Str::uuid() => $media->toArray()]
+                                    : []);
                             })
                             ->dehydrateStateUsing(function (CuratorPicker $component, mixed $state): ?string {
                                 $item = collect($state ?? [])->first();
