@@ -19,6 +19,10 @@ return [
 
     'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
 
+    // Tahmini maliyet: USD / video saniyesi (≈833 tok/s × $0.30/1M token).
+    // Fiyat güncellemesi deploy gerektirmez.
+    'cost_per_video_second' => (float) env('GEMINI_COST_PER_VIDEO_SECOND', 0.000250),
+
     /*
     | Video indirme + generateContent çağrısı tek HTTP isteğinde bittiği
     | için timeout toplam süreyi kapsar. Uzun videolarda artırılabilir.

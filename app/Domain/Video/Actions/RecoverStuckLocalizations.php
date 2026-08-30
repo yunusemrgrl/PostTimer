@@ -35,18 +35,12 @@ final class RecoverStuckLocalizations
         $stuck = VideoLocalization::query()
             ->whereIn('status', [LocalizationStatus::Analyzing->value, LocalizationStatus::Voicing->value])
             ->where('updated_at', '<=', $threshold)
-            ->pluck('id');
+            ->get();
 
         $recovered = 0;
         $skipped = 0;
 
-        foreach ($stuck as $id) {
-            $record = VideoLocalization::find($id);
-
-            if ($record === null) {
-                continue;
-            }
-
+        foreach ($stuck as $record) {
             // Koşullu finalize: bu satır hâlâ analyzing/voicing'de ve hâlâ bayat mı?
             $finalized = VideoLocalization::query()
                 ->where('id', $record->id)

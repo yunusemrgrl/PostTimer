@@ -53,7 +53,6 @@ class InstagramAccount extends Model
     {
         return [
             'access_token' => 'encrypted',
-            'verification_code' => 'encrypted',
             'followers_count' => 'integer',
             'media_count' => 'integer',
             'last_synced_at' => 'datetime',

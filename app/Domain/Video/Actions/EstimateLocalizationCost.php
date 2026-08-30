@@ -23,15 +23,6 @@ use App\Models\VideoLocalization;
  */
 final class EstimateLocalizationCost
 {
-    /** Gemini 2.5 Flash: USD / video saniyesi (≈833 tok/s × $0.30/1M). */
-    private const GEMINI_USD_PER_SECOND = 0.000250;
-
-    /** ElevenLabs Flash v2.5: USD / 1K karakter. */
-    private const TTS_FLASH_USD_PER_1K = 0.06;
-
-    /** ElevenLabs Multilingual v2: USD / 1K karakter. */
-    private const TTS_MULTILINGUAL_USD_PER_1K = 0.22;
-
     public function __invoke(
         VideoLocalization $localization,
         ?string $ttsModelId = null,
@@ -39,7 +30,7 @@ final class EstimateLocalizationCost
     ): CostEstimate {
         $translation = $localization->translation ?? [];
 
-        // --- Gemini: video süresine göre ---
+        // --- Gemini: video süresine göre (config: cost_per_video_second) ---
         $segments = $translation['segments'] ?? [];
         $geminiSeconds = 0.0;
         if (filled($segments)) {
@@ -49,18 +40,21 @@ final class EstimateLocalizationCost
                 $geminiSeconds = max(0.0, (float) end($ends) - (float) reset($starts));
             }
         }
-        $geminiCost = round($geminiSeconds * self::GEMINI_USD_PER_SECOND, 4);
+        $geminiCost = round(
+            $geminiSeconds * (float) config('gemini.cost_per_video_second', 0.000250),
+            4,
+        );
 
-        // --- ElevenLabs: script karakter sayısı × model fiyatı ---
+        // --- ElevenLabs: script karakter sayısı × model fiyatı (config) ---
         $ttsCost = 0.0;
         $charCount = 0;
-        $modelId = $ttsModelId ?? config('elevenlabs.tts.model_id', 'eleven_flash_v2_5');
+        $modelId = $ttsModelId ?? (string) config('elevenlabs.tts.model_id', 'eleven_flash_v2_5');
 
         if ($includeTts && filled($localization->script)) {
             $charCount = mb_strlen($localization->script);
             $per1k = str_contains($modelId, 'multilingual')
-                ? self::TTS_MULTILINGUAL_USD_PER_1K
-                : self::TTS_FLASH_USD_PER_1K;
+                ? (float) config('elevenlabs.tts.cost_per_1k_multilingual', 0.22)
+                : (float) config('elevenlabs.tts.cost_per_1k_flash', 0.06);
             $ttsCost = round(($charCount / 1000) * $per1k, 4);
         }
 

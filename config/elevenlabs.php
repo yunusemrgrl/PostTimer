@@ -31,6 +31,11 @@ return [
         // hoparlöründe dublaj için yeterli. Yüksek çözünürlük istersen
         // mp3_44100_192 veya mp3_44100_320 kullanılabilir.
         'output_format' => env('ELEVENLABS_OUTPUT_FORMAT', 'mp3_22050_64'),
+
+        // Tahmini maliyet (USD / 1K karakter) — EstimateLocalizationCost action'ı
+        // kullanır. Fiyat güncellemesi deploy gerektirmez.
+        'cost_per_1k_flash' => (float) env('ELEVENLABS_COST_PER_1K_FLASH', 0.06),
+        'cost_per_1k_multilingual' => (float) env('ELEVENLABS_COST_PER_1K_MULTILINGUAL', 0.22),
     ],
 
     'timeout' => (int) env('ELEVENLABS_TIMEOUT', 120),

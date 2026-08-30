@@ -14,8 +14,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('video_localizations', function (Blueprint $table) {
-            $table->decimal('estimated_cost_usd', 8, 4)->default(0)->after('error_message');
-            $table->json('cost_breakdown')->nullable()->after('estimated_cost_usd');
+            // Not: PostgreSQL after() desteklemez (sütun sona eklenir); MySQL'de
+            // error_message'dan sonra yerleşir. Sıra kozmetik — kolonlar nullable.
+            $table->decimal('estimated_cost_usd', 8, 4)->default(0);
+            $table->json('cost_breakdown')->nullable();
         });
     }
 

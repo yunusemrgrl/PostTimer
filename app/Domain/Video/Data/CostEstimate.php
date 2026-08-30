@@ -33,6 +33,7 @@ final class CostEstimate
     public function toArray(): array
     {
         return [
+            'total' => $this->total(),
             'gemini' => round($this->geminiCost, 4),
             'tts' => round($this->ttsCost, 4),
             'currency' => $this->currency,
