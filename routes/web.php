@@ -17,6 +17,7 @@ Route::middleware(['auth', 'throttle:10,1'])->group(function () {
 });
 
 Route::post('/telegram/webhook', [TelegramWebhookController::class, 'webhook'])
+    ->middleware('throttle:60,1')
     ->name('telegram.webhook');
 
 Route::get('/media/{media:name}/thumbnail', [MediaThumbnailController::class, 'show'])

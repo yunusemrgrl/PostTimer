@@ -52,7 +52,7 @@ class ContentFactory extends Factory
         return $this->state(fn () => [
             'type' => Content::TYPE_IMAGE,
             'surface' => Content::SURFACE_STORY,
-            'story_link' => 'https://www.amazon.com.tr/dp/'.strtoupper(fake()->bothify('B0?????????')),
+            'story_link' => 'https://www.amazon.com.tr/dp/'.strtoupper(fake()->bothify('B0????????')),
         ]);
     }
 
