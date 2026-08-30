@@ -18,7 +18,7 @@ class ProductFactory extends Factory
      */
     public function definition(): array
     {
-        $asin = strtoupper(fake()->bothify('B0?????????'));
+        $asin = strtoupper(fake()->bothify('B0????????'));
 
         return [
             'team_id' => Team::factory(),
