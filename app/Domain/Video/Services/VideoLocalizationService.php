@@ -2,6 +2,7 @@
 
 namespace App\Domain\Video\Services;
 
+use App\Domain\Video\Actions\EstimateLocalizationCost;
 use App\Domain\Video\Enums\LocalizationStatus;
 use App\Domain\Video\Services\Contracts\TextToSpeechProvider;
 use App\Domain\Video\Services\Contracts\VideoTranslationProvider;
@@ -38,6 +39,7 @@ class VideoLocalizationService
     public function __construct(
         protected VideoTranslationProvider $gemini,
         protected TextToSpeechProvider $tts,
+        protected EstimateLocalizationCost $estimateCost,
     ) {}
 
     /**
@@ -89,6 +91,13 @@ class VideoLocalizationService
                 'translation' => $translation,
                 'script' => $this->buildScript($translation),
                 'error_message' => null,
+            ]);
+
+            // Maliyet takibi: Gemini analizi (TTS henüz yok).
+            $cost = ($this->estimateCost)($localization, includeTts: false);
+            $localization->update([
+                'estimated_cost_usd' => $cost->total(),
+                'cost_breakdown' => $cost->toArray(),
             ]);
 
             $this->log($localization, 'localization.analyzed', [
@@ -150,9 +159,17 @@ class VideoLocalizationService
                 'error_message' => null,
             ]);
 
+            // Maliyet takibi: Gemini + ElevenLabs TTS (kümülatif toplam).
+            $cost = ($this->estimateCost)($localization, includeTts: true);
+            $localization->update([
+                'estimated_cost_usd' => $cost->total(),
+                'cost_breakdown' => $cost->toArray(),
+            ]);
+
             $this->log($localization, 'localization.completed', [
                 'audio_media_id' => $audioMedia->id,
                 'script_length' => mb_strlen($script),
+                'estimated_cost_usd' => $cost->total(),
                 'note' => 'Pilot: ses + script kullanıcıya sunuldu; video render/mux yapılmadı.',
             ]);
 

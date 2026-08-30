@@ -29,6 +29,22 @@
         @endif
     </div>
 
+    @if ((float) $localization->estimated_cost_usd > 0)
+        <div class="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
+            <span class="font-semibold text-gray-700">Tahmini maliyet:</span>
+            <span class="font-mono">${{ number_format((float) $localization->estimated_cost_usd, 4) }}</span>
+            @if (filled($localization->cost_breakdown))
+                <span class="text-gray-400">
+                    (Gemini ${{ number_format((float) ($localization->cost_breakdown['gemini'] ?? 0), 4) }}
+                    @if (isset($localization->cost_breakdown['tts']) && (float) $localization->cost_breakdown['tts'] > 0)
+                        + TTS ${{ number_format((float) $localization->cost_breakdown['tts'], 4) }}
+                    @endif)
+                    )
+                </span>
+            @endif
+        </div>
+    @endif
+
     @if ($localization->error_message)
         <div class="rounded-lg border border-danger-200 bg-danger-50 p-3 text-sm text-danger-700">
             {{ $localization->error_message }}

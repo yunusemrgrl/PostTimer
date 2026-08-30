@@ -40,6 +40,8 @@ class VideoLocalization extends Model
         'script',
         'audio_media_id',
         'error_message',
+        'estimated_cost_usd',
+        'cost_breakdown',
     ];
 
     protected function casts(): array
@@ -48,6 +50,8 @@ class VideoLocalization extends Model
             'status' => LocalizationStatus::class,
             'target_language' => LocalizationLanguage::class,
             'translation' => 'array',
+            'estimated_cost_usd' => 'decimal:4',
+            'cost_breakdown' => 'array',
         ];
     }
 
