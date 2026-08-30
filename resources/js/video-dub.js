@@ -1,4 +1,4 @@
-﻿/**
+/**
  * SRT (SubRip) ureteci — segment'lerden SRT formatina cevirir.
  * Pure fonksiyon. SRT export icin tutuldu; altyazi yakma canvas ile yapilir.
  */
@@ -111,16 +111,23 @@ document.addEventListener('alpine:init', () => {
         burnSubtitles,
         busy: false,
         status: 'Orijinal video + Turkce sesi tarayicida birlestirir.',
+        progress: 0,
 
         async combine() {
             if (this.busy) return;
 
             this.busy = true;
+            this.progress = 0;
             this.status = 'ffmpeg yukleniyor…';
 
             try {
                 const { FFmpeg } = await import('@ffmpeg/ffmpeg');
                 const ffmpeg = new FFmpeg();
+
+                ffmpeg.on('progress', ({ progress }) => {
+                    this.progress = Math.max(0, Math.min(100, Math.round(progress * 100)));
+                });
+
                 await ffmpeg.load();
 
                 // Turkce sesi indir
@@ -225,6 +232,7 @@ document.addEventListener('alpine:init', () => {
                 await ffmpeg.writeFile(`frame_${String(i).padStart(6, '0')}.jpg`, arr);
 
                 this.status = `Kareler isleniyor… ${i + 1}/${totalFrames}`;
+                this.progress = Math.round(((i + 1) / totalFrames) * 70);
             }
 
             // Encode: JPEG kareler + TTS ses -> MP4
@@ -257,6 +265,59 @@ document.addEventListener('alpine:init', () => {
             a.remove();
             URL.revokeObjectURL(url);
             this.status = 'Dublajli video indirildi.' + (burn ? ' (altyazili)' : '');
+            this.progress = 100;
+        },
+    }));
+});
+
+/**
+ * Wavesurfer.js waveform onizleme component'i (Alpine).
+ *
+ * BSD-3-Clause licansli wavesurfer.js ile Turkce sesin waveform'unu
+ * gosterir. Lazy load — ilk render'da import edilir, x-init ile baslatilir.
+ *
+ * Kullanim (blade):
+ *   <div x-data="audioWaveformer(@js($audioUrl))" x-init="init()">
+ *     <div x-ref="waveform"></div>
+ *     <button x-on:click="toggle" x-text="playing ? 'Durdur' : 'Oynat'"></button>
+ *   </div>
+ */
+document.addEventListener('alpine:init', () => {
+    Alpine.data('audioWaveformer', (audioUrl) => ({
+        audioUrl,
+        wavesurfer: null,
+        playing: false,
+        ready: false,
+
+        async init() {
+            const WaveSurfer = (await import('wavesurfer.js')).default;
+            this.wavesurfer = WaveSurfer.create({
+                container: this.$refs.waveform,
+                waveColor: '#94a3b8',
+                progressColor: '#6366f1',
+                barWidth: 2,
+                barRadius: 1,
+                height: 48,
+                url: this.audioUrl,
+            });
+
+            this.wavesurfer.on('ready', () => {
+                this.ready = true;
+            });
+
+            this.wavesurfer.on('audioprocess', () => {
+                this.playing = true;
+            });
+
+            this.wavesurfer.on('finish', () => {
+                this.playing = false;
+            });
+        },
+
+        toggle() {
+            if (!this.wavesurfer) return;
+            this.wavesurfer.playPause();
+            this.playing = this.wavesurfer.isPlaying();
         },
     }));
 });

@@ -79,9 +79,53 @@
     @if ($localization->hasAudio() && $localization->audioMedia !== null)
         <div>
             <h4 class="mb-2 text-sm font-semibold text-gray-700">Türkçe Ses Önizleme</h4>
-            <audio controls preload="none" src="{{ $localization->audioMedia->url }}" class="w-full mb-3"></audio>
+
+            {{-- Wavesurfer.js waveform (BSD-3-Clause) --}}
+            <div
+                x-data="audioWaveformer(@js($localization->audioMedia->url))"
+                x-init="init()"
+                class="space-y-2"
+            >
+                <div x-ref="waveform" class="rounded-lg bg-gray-50 p-2"></div>
+                <button
+                    type="button"
+                    x-on:click="toggle"
+                    :disabled="!ready"
+                    x-text="playing ? 'Durdur' : 'Oynat'"
+                    class="rounded-md bg-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 disabled:opacity-50"
+                ></button>
+            </div>
 
             @if ($localization->content->media_url)
+                {{-- Önce/Sonra video karşılaştırma --}}
+                <div x-data="{ showDubbed: false }" class="mt-3 space-y-2">
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            x-on:click="showDubbed = false"
+                            :class="showDubbed ? 'bg-gray-200 text-gray-600' : 'bg-primary-600 text-white'"
+                            class="rounded-md px-3 py-1.5 text-xs font-semibold"
+                        >Orijinal Video</button>
+                        <button
+                            type="button"
+                            x-on:click="showDubbed = true"
+                            :class="showDubbed ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'"
+                            class="rounded-md px-3 py-1.5 text-xs font-semibold"
+                        >Dublajlı Sonuç</button>
+                    </div>
+                    <video
+                        x-show="!showDubbed"
+                        controls
+                        preload="none"
+                        src="{{ $localization->content->media_url }}"
+                        class="w-full rounded-lg"
+                    ></video>
+                    <p x-show="showDubbed" class="rounded-lg bg-gray-50 p-4 text-sm text-gray-500">
+                        Dublajlı videoyu üretmek için aşağıdaki butona tıklayın. Üretilen video otomatik indirilir.
+                    </p>
+                </div>
+
+                {{-- Dublaj üretme + progress bar --}}
                 <div
                     x-data="dubCombiner(
                         @js($localization->content->media_url),
@@ -90,8 +134,7 @@
                         @js($segments),
                         false
                     )"
-                    x-init="$watch('burnSubtitles', () => {})"
-                    class="space-y-2"
+                    class="mt-3 space-y-2"
                 >
                     <label class="flex items-center gap-2 text-sm text-gray-700">
                         <input type="checkbox" x-model="burnSubtitles" class="rounded border-gray-300 text-primary-600">
@@ -104,7 +147,20 @@
                         x-text="busy ? 'Birleştiriliyor…' : 'Dublajlı Videoyu İndir'"
                         class="fi-btn fi-btn-size-md fi-color-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm bg-primary-600 text-white inline-flex items-center gap-2 disabled:opacity-60"
                     >🎬 Dublajlı Videoyu İndir</button>
-                    <p class="text-xs text-gray-500" x-text="status"></p>
+
+                    {{-- Progress bar --}}
+                    <div x-show="busy || progress > 0" class="space-y-1">
+                        <div class="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                            <div
+                                class="h-full rounded-full bg-primary-600 transition-all duration-300"
+                                :style="`width: ${progress}%`"
+                            ></div>
+                        </div>
+                        <p class="text-xs text-gray-500">
+                            <span x-text="status"></span>
+                            <span x-show="progress > 0">(<span x-text="progress"></span>%)</span>
+                        </p>
+                    </div>
                 </div>
             @else
                 <p class="text-xs text-gray-500">Orijinal video URL'si bulunamadı; dublaj birleştirme atlandı.</p>
