@@ -16,6 +16,33 @@ use Illuminate\Support\Facades\Storage;
 #[ObservedBy(MediaObserver::class)]
 class Media extends \Awcodes\Curator\Models\Media
 {
+    /**
+     * Curator Media's fillable includes team_id (tenancy). Parent fillable
+     * omits it, which silently drops team_id on mass-assignment — audio Media
+     * persisted by the localization pipeline would get team_id=NULL and the
+     * tenant-scoped panel query would never find it (audio preview hidden).
+     */
+    protected $fillable = [
+        'disk',
+        'directory',
+        'visibility',
+        'name',
+        'path',
+        'width',
+        'height',
+        'size',
+        'type',
+        'ext',
+        'alt',
+        'title',
+        'description',
+        'caption',
+        'exif',
+        'curations',
+        'file',
+        'team_id',
+    ];
+
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);

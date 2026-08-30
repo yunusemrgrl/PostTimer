@@ -24,7 +24,7 @@
 
         @if ($localization->source_language)
             <span class="text-xs text-gray-500">
-                Kaynak dil: {{ strtoupper($localization->source_language) }} → Hedef: {{ strtoupper($localization->target_language) }}
+                Kaynak dil: {{ strtoupper($localization->source_language) }} → Hedef: {{ strtoupper($localization->target_language->value ?? '') }}
             </span>
         @endif
     </div>
@@ -38,7 +38,7 @@
                     (Gemini ${{ number_format((float) ($localization->cost_breakdown['gemini'] ?? 0), 4) }}
                     @if (isset($localization->cost_breakdown['tts']) && (float) $localization->cost_breakdown['tts'] > 0)
                         + TTS ${{ number_format((float) $localization->cost_breakdown['tts'], 4) }}
-                    @endif)
+                    @endif
                     )
                 </span>
             @endif
