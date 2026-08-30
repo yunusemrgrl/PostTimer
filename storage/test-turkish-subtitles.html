@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Turkce Altyazi Canvas Testi</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #1a1a2e; color: #eee; }
+        canvas { border: 2px solid #444; display: block; margin: 10px 0; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+        .info { margin-top: 15px; padding: 10px; background: #16213e; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <h2>Turkce Karakter Canvas Altyazi Testi</h2>
+    <p>Asagidaki kelimeler Bilal'in gercek cevirilerinde gecen Turkce ozel karakterler icerir.
+    Cikti da bu karakterlerin dogru gorundugunu goyle dogrulayin.</p>
+    <button onclick="runTest()">Testi Çalıştır</button>
+    <div id="canvas-container"></div>
+    <div class="info" id="result"></div>
+
+    <script>
+    function drawSubtitleToCanvas(ctx, text, videoWidth, videoHeight) {
+        if (!text || !text.trim()) return;
+        const fontSize = Math.round(videoHeight * 0.045);
+        const hPadding = Math.round(videoWidth * 0.08);
+        const bottomMargin = Math.round(videoHeight * 0.08);
+        const maxWidth = videoWidth - hPadding * 2;
+        const lineHeight = Math.round(fontSize * 1.4);
+        ctx.font = 'bold ' + fontSize + 'px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        const words = text.split(/\s+/);
+        const lines = [];
+        let currentLine = '';
+        for (const word of words) {
+            const testLine = currentLine ? currentLine + ' ' + word : word;
+            if (ctx.measureText(testLine).width > maxWidth && currentLine) {
+                lines.push(currentLine);
+                currentLine = word;
+            } else {
+                currentLine = testLine;
+            }
+        }
+        if (currentLine) lines.push(currentLine);
+        const centerX = videoWidth / 2;
+        const baseY = videoHeight - bottomMargin;
+        for (let i = lines.length - 1; i >= 0; i--) {
+            const y = baseY - (lines.length - 1 - i) * lineHeight;
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.lineWidth = Math.max(2, Math.round(fontSize * 0.14));
+            ctx.lineJoin = 'round';
+            ctx.strokeText(lines[i], centerX, y);
+            ctx.fillStyle = 'rgba(255, 255, 255, 1)';
+            ctx.fillText(lines[i], centerX, y);
+        }
+    }
+
+    function runTest() {
+        var testCases = [
+            'öğreniyorlar',
+            'çıkarabiliyorsunuz',
+            'İsmini söyler misin?',
+            'ğuışöç ĞÜİŞÖÇ',
+            'Bilal abi videoları Türkçeye çeviriyor'
+        ];
+        var canvasContainer = document.getElementById('canvas-container');
+        canvasContainer.innerHTML = '';
+        testCases.forEach(function(text, idx) {
+            var canvas = document.createElement('canvas');
+            canvas.width = 640;
+            canvas.height = 360;
+            canvas.style.border = '2px solid #444';
+            canvas.style.display = 'block';
+            canvas.style.margin = '10px 0';
+            canvasContainer.appendChild(canvas);
+            var label = document.createElement('p');
+            label.textContent = 'Test ' + (idx + 1) + ': "' + text + '"';
+            label.style.color = '#aaa';
+            label.style.fontSize = '13px';
+            canvasContainer.appendChild(label);
+            var ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#222';
+            ctx.fillRect(0, 0, 640, 360);
+            drawSubtitleToCanvas(ctx, text, 640, 360);
+        });
+        var result = document.getElementById('result');
+        result.innerHTML = '<strong>Görsel kontrol:</strong> Her canvas ta ilgili test kelimesi Türkçe karakterlerle (İ/ğ/ı/ş/ö/ç/Ü) doğru render olmali. Özellikle Test 1 (öğreniyorlar) ve Test 2 (çıkarabiliyorsunuz) — Bilal in gercek cevirilerinde gecen kelimeler.';
+    }
+    </script>
+</body>
+</html>
