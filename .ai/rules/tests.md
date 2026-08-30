@@ -5,6 +5,9 @@ paths:
 
 # Tests
 
+## Do NOT write tests proactively (user preference)
+The user does not want new tests written for changes unless they explicitly ask ("test istemiyorum" — 2026-08). Skip writing Pest tests for new/modified code; do not delete or modify existing tests. If verification is needed, run php -l / existing suites only.
+
 ## Always add a catch-all Http::fake pattern in tests
 When using Http::fake(['pattern' => ...]), requests that match NO pattern fall through to the REAL network (PendingRequest::buildStubHandler passes unmatched requests to the live handler). Always add a '*' => Http::response() catch-all (or Http::preventStrayRequests()) so tests never hit external APIs.
 

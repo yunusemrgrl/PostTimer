@@ -7,5 +7,5 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/** | .ai/rules/app.md |
 | bootstrap/** | .ai/rules/bootstrap.md |
 | app/Models/** | .ai/rules/models.md |
-| app/Services/** | .ai/rules/services.md |
+| app/Domain/**/Services/**, app/Support/Http/** | .ai/rules/services.md |
 | tests/** | .ai/rules/tests.md |
