@@ -10,6 +10,7 @@ use App\Models\Publication;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
+use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -183,4 +184,15 @@ it('lists contents with their publication summary column', function () {
 
     Livewire::test(ListContents::class)
         ->assertCanSeeTableRecords([$content]);
+});
+
+it('shows AI Dublaj action only for video contents', function () {
+    bootPanelForContent($this->team);
+
+    $video = Content::factory()->reels()->create(['team_id' => $this->team->id]);
+    $image = Content::factory()->create(['team_id' => $this->team->id, 'type' => Content::TYPE_IMAGE]);
+
+    Livewire::test(ListContents::class)
+        ->assertActionVisible(TestAction::make('localizeVideo')->table($video))
+        ->assertActionHidden(TestAction::make('localizeVideo')->table($image));
 });

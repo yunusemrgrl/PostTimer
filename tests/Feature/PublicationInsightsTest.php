@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Instagram\Services\InstagramInsightsService;
 use App\Events\PublicationPublished;
 use App\Jobs\SyncPublicationInsights;
 use App\Listeners\SyncPublicationInsightsListener;
@@ -8,7 +9,6 @@ use App\Models\InstagramAccount;
 use App\Models\InstagramPostInsight;
 use App\Models\Publication;
 use App\Models\Team;
-use App\Services\InstagramInsightsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;

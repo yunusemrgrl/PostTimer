@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Domain\Stock\Services;
 
 use App\Models\Product;
 use Illuminate\Http\Client\PendingRequest;

@@ -2,8 +2,8 @@
 
 namespace App\Filament\App\Resources\Products\Schemas;
 
+use App\Domain\Stock\Services\AmazonProductParser;
 use App\Models\Product;
-use App\Services\AmazonProductParser;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;

@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Publishing\Services\PublicationPublishingService;
 use App\Events\PublicationFlagged;
 use App\Events\PublicationPublished;
 use App\Events\PublicationPublishFailed;
@@ -9,7 +10,6 @@ use App\Models\InstagramAccount;
 use App\Models\Product;
 use App\Models\Publication;
 use App\Models\TelegramSetting;
-use App\Services\PublicationPublishingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;

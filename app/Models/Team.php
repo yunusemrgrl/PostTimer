@@ -81,6 +81,14 @@ class Team extends Model implements HasCurrentTenantLabel
         return $this->hasOne(TelegramSetting::class);
     }
 
+    /**
+     * Bu hesaba bağlı AI video yerelleştirme işleri.
+     */
+    public function videoLocalizations(): HasMany
+    {
+        return $this->hasMany(VideoLocalization::class);
+    }
+
     public function getCurrentTenantLabel(): string
     {
         return 'Hesap';

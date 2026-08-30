@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Domain\Instagram\Services;
 
 use App\Domain\Instagram\Payload\InstagramContainerPayload;
 use App\Models\InstagramAccount;

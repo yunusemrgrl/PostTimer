@@ -2,8 +2,8 @@
 
 namespace App\Mcp\Tools;
 
+use App\Domain\Publishing\Services\MediaUrlImporter;
 use App\Models\Team;
-use App\Services\MediaUrlImporter;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;

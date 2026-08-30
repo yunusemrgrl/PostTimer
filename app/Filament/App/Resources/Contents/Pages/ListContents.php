@@ -2,9 +2,9 @@
 
 namespace App\Filament\App\Resources\Contents\Pages;
 
+use App\Domain\Publishing\Services\BulkMediaImportService;
 use App\Filament\App\Resources\Contents\ContentResource;
 use App\Models\Content;
-use App\Services\BulkMediaImportService;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Forms\Components\FileUpload;

@@ -1,11 +1,11 @@
 <?php
 
+use App\Domain\Publishing\Services\PublicationPublishingService;
 use App\Events\PublicationPublished;
 use App\Events\PublicationPublishFailed;
 use App\Models\Content;
 use App\Models\InstagramAccount;
 use App\Models\Publication;
-use App\Services\PublicationPublishingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Event;

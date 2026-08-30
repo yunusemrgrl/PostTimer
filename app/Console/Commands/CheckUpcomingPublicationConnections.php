@@ -2,10 +2,10 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Instagram\Services\InstagramPublishingService;
 use App\Events\PublicationFlagged;
 use App\Models\InstagramAccount;
 use App\Models\Publication;
-use App\Services\InstagramPublishingService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;

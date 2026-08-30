@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Domain\Notification\Services;
 
 use Illuminate\Support\Facades\Http;
 use RuntimeException;

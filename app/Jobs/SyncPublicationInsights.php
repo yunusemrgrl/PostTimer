@@ -2,8 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Domain\Instagram\Services\InstagramInsightsService;
 use App\Models\Publication;
-use App\Services\InstagramInsightsService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;

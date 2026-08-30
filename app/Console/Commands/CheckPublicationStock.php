@@ -2,9 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Stock\Services\AmazonStockChecker;
 use App\Events\PublicationFlagged;
 use App\Models\Publication;
-use App\Services\AmazonStockChecker;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;

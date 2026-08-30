@@ -2,8 +2,8 @@
 
 namespace App\Filament\App\Resources\InstagramAccounts\Tables;
 
+use App\Domain\Instagram\Services\InstagramAccountService;
 use App\Models\InstagramAccount;
-use App\Services\InstagramAccountService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;

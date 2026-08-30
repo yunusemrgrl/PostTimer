@@ -2,9 +2,9 @@
 
 namespace App\Filament\App\Resources\Contents\RelationManagers;
 
+use App\Domain\Publishing\Services\PublicationPublishingService;
 use App\Jobs\PublishScheduledPublication;
 use App\Models\Publication;
-use App\Services\PublicationPublishingService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;

@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Instagram\Services\InstagramAccountService;
+use App\Domain\Instagram\Services\InstagramOAuthService;
 use App\Filament\App\Resources\InstagramAccounts\InstagramAccountResource;
 use App\Models\Team;
-use App\Services\InstagramAccountService;
-use App\Services\InstagramOAuthService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;

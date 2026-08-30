@@ -1,11 +1,12 @@
 <?php
 
-namespace App\Services;
+namespace App\Domain\Publishing\Services;
 
 use App\Domain\Instagram\HasPublishableMedia;
 use App\Domain\Instagram\InstagramMediaFactory;
 use App\Domain\Instagram\Media\CarouselChild;
 use App\Domain\Instagram\Media\CarouselMedia;
+use App\Domain\Instagram\Services\InstagramPublishingService;
 use App\Events\PublicationPublished;
 use App\Models\InstagramAccount;
 use App\Models\Publication;

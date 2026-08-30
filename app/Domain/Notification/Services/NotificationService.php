@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Domain\Notification\Services;
 
 use App\Models\Team;
 use Illuminate\Support\Facades\Log;

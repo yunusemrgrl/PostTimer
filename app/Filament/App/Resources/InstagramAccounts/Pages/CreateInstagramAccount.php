@@ -2,9 +2,9 @@
 
 namespace App\Filament\App\Resources\InstagramAccounts\Pages;
 
+use App\Domain\Instagram\Services\InstagramAccountService;
+use App\Domain\Instagram\Services\InstagramOAuthService;
 use App\Filament\App\Resources\InstagramAccounts\InstagramAccountResource;
-use App\Services\InstagramAccountService;
-use App\Services\InstagramOAuthService;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Throwable;

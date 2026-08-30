@@ -2,10 +2,10 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Notification\Services\NotificationService;
 use App\Models\InstagramAccount;
 use App\Models\Publication;
 use App\Models\Team;
-use App\Services\NotificationService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;

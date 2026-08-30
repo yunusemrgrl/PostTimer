@@ -1,7 +1,7 @@
 <?php
 
+use App\Domain\Instagram\Services\InstagramOAuthService;
 use App\Models\InstagramAccount;
-use App\Services\InstagramOAuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;

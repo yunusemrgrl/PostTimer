@@ -1,9 +1,9 @@
 <?php
 
+use App\Domain\Publishing\Services\PublicationPublishingService;
 use App\Models\Content;
 use App\Models\InstagramAccount;
 use App\Models\Publication;
-use App\Services\PublicationPublishingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;

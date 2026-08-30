@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
-use App\Models\Media;
-use App\Observers\MediaObserver;
+use App\Domain\Video\Services\Contracts\TextToSpeechProvider;
+use App\Domain\Video\Services\Contracts\VideoTranslationProvider;
+use App\Domain\Video\Services\ElevenLabsTtsService;
+use App\Domain\Video\Services\GeminiVideoTranslationService;
 use Awcodes\Curator\Facades\Curator;
 use Awcodes\Curator\Facades\Glide;
 use Awcodes\Curator\Glide\SymfonyResponseFactory;
@@ -16,6 +18,11 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        // AI sağlayıcıları (Strategy): orkestratör kontratlara bağlıdır;
+        // provider değişimi yalnızca buradaki binding'i değiştirir.
+        $this->app->bind(VideoTranslationProvider::class, GeminiVideoTranslationService::class);
+        $this->app->bind(TextToSpeechProvider::class, ElevenLabsTtsService::class);
+
         Glide::serverConfig([
             'response' => new SymfonyResponseFactory(
                 app('request')
@@ -50,7 +57,7 @@ class AppServiceProvider extends ServiceProvider
             throw new RuntimeException('MEDIA_TENANT_HASH_KEY tanımlı değil — uygulama başlatılamıyor.');
         }
 
-        Media::observe(MediaObserver::class);
+        // Media observer: app/Models/Media.php uzerindeki #[ObservedBy] attribute'u ile bind ediliyor.
         Curator::maxSize(102400);
     }
 }

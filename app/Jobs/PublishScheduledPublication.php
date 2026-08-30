@@ -2,9 +2,9 @@
 
 namespace App\Jobs;
 
+use App\Domain\Publishing\Services\PublicationPublishingService;
 use App\Events\PublicationPublishFailed;
 use App\Models\Publication;
-use App\Services\PublicationPublishingService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;

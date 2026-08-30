@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Services\TelegramBotService;
+use App\Domain\Notification\Services\TelegramBotService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;

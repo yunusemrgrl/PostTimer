@@ -1,12 +1,12 @@
 <?php
 
+use App\Domain\Stock\Services\AmazonProductParser;
 use App\Filament\App\Resources\Products\Pages\CreateProduct;
 use App\Filament\App\Resources\Products\Pages\ListProducts;
 use App\Models\Product;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
-use App\Services\AmazonProductParser;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;

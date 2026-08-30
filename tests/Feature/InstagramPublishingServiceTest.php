@@ -1,8 +1,8 @@
 <?php
 
+use App\Domain\Instagram\Services\InstagramPublishingService;
 use App\Models\InstagramAccount;
 use App\Models\Team;
-use App\Services\InstagramPublishingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 

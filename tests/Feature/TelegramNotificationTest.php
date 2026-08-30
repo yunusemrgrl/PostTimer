@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Notification\Services\TelegramBotService;
 use App\Jobs\PublishScheduledPublication;
 use App\Models\Content;
 use App\Models\Product;
@@ -8,7 +9,6 @@ use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\TelegramSetting;
 use App\Models\User;
-use App\Services\TelegramBotService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;

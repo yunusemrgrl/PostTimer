@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Domain\Instagram\Services;
 
 use App\Domain\Instagram\InstagramMediaFactory;
 use App\Models\InstagramAccount;

@@ -1,9 +1,10 @@
 <?php
 
-namespace App\Services;
+namespace App\Domain\Publishing\Services;
 
 use App\Models\Media;
 use App\Models\Team;
+use App\Support\Http\SafeHttpFetcher;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;

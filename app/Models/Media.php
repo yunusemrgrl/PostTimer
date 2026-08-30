@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Observers\MediaObserver;
 use Awcodes\Curator\Facades\Curator;
 use Database\Factories\MediaFactory;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
 
+#[ObservedBy(MediaObserver::class)]
 class Media extends \Awcodes\Curator\Models\Media
 {
     public function team(): BelongsTo

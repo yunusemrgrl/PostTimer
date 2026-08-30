@@ -2,9 +2,9 @@
 
 namespace App\Jobs;
 
+use App\Domain\Instagram\Services\InstagramPublishingService;
+use App\Domain\Notification\Services\NotificationService;
 use App\Models\Publication;
-use App\Services\InstagramPublishingService;
-use App\Services\NotificationService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
