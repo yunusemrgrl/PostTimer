@@ -73,6 +73,7 @@ class AppPanelProvider extends PanelProvider
             ])
             ->assets([
                 Js::make('video-thumbnail', resource_path('js/video-thumbnail.js')),
+                Js::make('video-dub', resource_path('js/video-dub.js')),
             ])
             ->renderHook(
                 PanelsRenderHook::STYLES_AFTER,
