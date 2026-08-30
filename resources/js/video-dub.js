@@ -102,8 +102,22 @@ function drawSubtitleToCanvas(ctx, text, videoWidth, videoHeight) {
  * Altyazi kapali (burnSubtitles=false):
  *   Hizli mux: -c:v copy -c:a aac -shortest (video yeniden kodlanmaz).
  */
-document.addEventListener('alpine:init', () => {
-    Alpine.data('dubCombiner', (videoUrl, audioUrl, outputName, segments = [], burnSubtitles = false) => ({
+// Alpine component kaydi: modul scriptimiz, Filament'in Alpine'ini
+// (alpine:init olayi) kurmasindan once de sonra da yuklenebilir. Olay
+// dispatch edilmisse (window.Alpine tanimliysa) bir dinleyici olayi
+// kacirir ve component hic tanimlanmaz — modalda "dubCombiner is not
+// defined" bunun sonucuydu. Iki durumu da guvenli kapsayan kayit:
+function registerAlpineComponent(name, definition) {
+    const register = () => Alpine.data(name, definition);
+
+    if (window.Alpine) {
+        register();
+    } else {
+        document.addEventListener('alpine:init', register, { once: true });
+    }
+}
+
+registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments = [], burnSubtitles = false) => ({
         videoUrl,
         audioUrl,
         outputName: outputName || 'dublaj',
@@ -268,7 +282,6 @@ document.addEventListener('alpine:init', () => {
             this.progress = 100;
         },
     }));
-});
 
 /**
  * Wavesurfer.js waveform onizleme component'i (Alpine).
@@ -282,8 +295,7 @@ document.addEventListener('alpine:init', () => {
  *     <button x-on:click="toggle" x-text="playing ? 'Durdur' : 'Oynat'"></button>
  *   </div>
  */
-document.addEventListener('alpine:init', () => {
-    Alpine.data('audioWaveformer', (audioUrl) => ({
+registerAlpineComponent('audioWaveformer', (audioUrl) => ({
         audioUrl,
         wavesurfer: null,
         playing: false,
@@ -320,4 +332,3 @@ document.addEventListener('alpine:init', () => {
             this.playing = this.wavesurfer.isPlaying();
         },
     }));
-});

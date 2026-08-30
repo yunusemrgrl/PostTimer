@@ -11,7 +11,6 @@ use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
-use Filament\Support\Assets\Js;
 use Filament\Support\Colors\Color;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -19,6 +18,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Vite;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AppPanelProvider extends PanelProvider
@@ -71,10 +71,14 @@ class AppPanelProvider extends PanelProvider
             ->plugins([
                 CuratorPlugin::make(),
             ])
-            ->assets([
-                Js::make('video-thumbnail', resource_path('js/video-thumbnail.js')),
-                Js::make('video-dub', resource_path('js/video-dub.js')),
-            ])
+            ->assets([])
+            ->renderHook(
+                PanelsRenderHook::SCRIPTS_BEFORE,
+                fn (): string => '
+                    <script type="module" src="'.e(Vite::asset('resources/js/video-thumbnail.js')).'"></script>
+                    <script type="module" src="'.e(Vite::asset('resources/js/video-dub.js')).'"></script>
+                ',
+            )
             ->renderHook(
                 PanelsRenderHook::STYLES_AFTER,
                 fn (): string => '<style>
