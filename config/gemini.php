@@ -7,7 +7,7 @@ return [
     | Google Gemini API
     |--------------------------------------------------------------------------
     |
-    | Video analizi + çeviri entegrasyonu. gemini-2.5-flash videoyu doğrudan
+    | Video analizi + çeviri entegrasyonu. gemini-3.6-flash videoyu doğrudan
     | input olarak alır; konuşmayı transkript eder, ekrandaki yazıları okur
     | ve hedef dile çevirir (timestamp'li JSON çıktısı).
     |
@@ -17,7 +17,7 @@ return [
 
     'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com'),
 
-    'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+    'model' => env('GEMINI_MODEL', 'gemini-3.6-flash'),
 
     // Tahmini maliyet: USD / video saniyesi (≈833 tok/s × $0.30/1M token).
     // Fiyat güncellemesi deploy gerektirmez.

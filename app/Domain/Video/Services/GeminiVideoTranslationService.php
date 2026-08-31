@@ -44,28 +44,32 @@ class GeminiVideoTranslationService extends AbstractExternalApiClient implements
      */
     public function analyze(string $mediaUrl, string $targetLanguage): array
     {
+        // Config hatasını indirmeden ÖNCE ver: GEMINI_API_KEY boşken videoyu
+        // boşuna indirmeyelim; aksi halde indirme hatası (403 vb.) asıl
+        // yapılandırma hatasını maskeleyebilir.
+        $apiKey = $this->requireConfig('api_key', 'GEMINI_API_KEY');
+
         $videoBytes = $this->downloadVideo($mediaUrl);
 
+        // Bellek butcesi: ham videoyu base64 sonrasi serbest birak. Guzzle'in
+        // 'json' secenegi govdeyi ikinci tam kopya olarak json_encode
+        // ettigi icin buyuk videolarda 128M worker'lar tasiyordu (fatal).
+        // Base64 alfabesi JSON escape gerektirmedigi icin govdeyi tek
+        // kopya halinde elle kurup ham body olarak gonderiyoruz.
+        $inlineVideo = base64_encode($videoBytes);
+        unset($videoBytes);
+
+        $body = '{"contents":[{"parts":[{"inline_data":{"mime_type":"video/mp4","data":"'
+            .$inlineVideo.'"}},{"text":'
+            .json_encode($this->buildPrompt($targetLanguage), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+            .'}]}],"generationConfig":{"responseMimeType":"application/json","temperature":0.2}}';
+        unset($inlineVideo);
+
         $response = $this->client($this->timeout())
-            ->withHeaders(['x-goog-api-key' => $this->requireConfig('api_key', 'GEMINI_API_KEY')])
-            ->post($this->url('/v1beta/models/'.$this->model().':generateContent'), [
-                'contents' => [
-                    [
-                        'parts' => [
-                            [
-                                'inline_data' => [
-                                    'mime_type' => 'video/mp4',
-                                    'data' => base64_encode($videoBytes),
-                                ],
-                            ],
-                            ['text' => $this->buildPrompt($targetLanguage)],
-                        ],
-                    ],
-                ],
-                'generationConfig' => [
-                    'responseMimeType' => 'application/json',
-                    'temperature' => 0.2,
-                ],
+            ->withHeaders(['x-goog-api-key' => $apiKey])
+            ->send('POST', $this->url('/v1beta/models/'.$this->model().':generateContent'), [
+                'headers' => ['Content-Type' => 'application/json'],
+                'body' => $body,
             ]);
 
         if (! $response->successful()) {
@@ -83,33 +87,64 @@ class GeminiVideoTranslationService extends AbstractExternalApiClient implements
 
     /**
      * Videoyu R2'den indirir. Public URL kullanildigindan ek imza gerekmez.
+     * Icerik diske akitilir (sink) — bellekte stream+string cift kopya
+     * birikmez; 128M worker'lar icin kritik.
      */
     protected function downloadVideo(string $mediaUrl): string
     {
-        $response = Http::timeout($this->timeout())->get($mediaUrl);
+        $tempFile = tempnam(sys_get_temp_dir(), 'gemini-video');
 
-        if (! $response->successful()) {
-            throw new RuntimeException("Video indirilemedi (HTTP {$response->status()}): {$mediaUrl}");
+        if ($tempFile === false) {
+            throw new RuntimeException('Video icin gecici dosya olusturulamadi.');
         }
 
-        $bytes = $response->body();
+        try {
+            $response = Http::timeout($this->timeout())
+                ->sink($tempFile)
+                ->get($mediaUrl);
 
-        if ($bytes === '') {
+            if (! $response->successful()) {
+                throw new RuntimeException("Video indirilemedi (HTTP {$response->status()}): {$mediaUrl}");
+            }
+
+            $size = (int) filesize($tempFile);
+
+            $this->ensureWithinInlineLimit($size, $mediaUrl);
+
+            $contents = (string) file_get_contents($tempFile);
+        } finally {
+            @unlink($tempFile);
+        }
+
+        if ($contents === '') {
             throw new RuntimeException('Video indirme bos dondu.');
         }
 
-        if (strlen($bytes) > self::MAX_VIDEO_BYTES) {
-            throw new RuntimeException(
-                'Video inline analiz limitini asiyor ('.round(strlen($bytes) / 1024 / 1024, 1).'MB > 20MB).'
-            );
+        return $contents;
+    }
+
+    /**
+     * Gemini inline_data 20MB siniri. Sinir asimini erken reddeder —
+     * buyuk videolar icin base64/json kopyalari hic baslamadan.
+     */
+    protected function ensureWithinInlineLimit(int $bytes, string $mediaUrl): void
+    {
+        if ($bytes === 0) {
+            throw new RuntimeException('Video indirme bos dondu.');
         }
 
-        return $bytes;
+        if ($bytes > self::MAX_VIDEO_BYTES) {
+            throw new RuntimeException(
+                'Video inline analiz limitini asiyo ('
+                .round($bytes / 1024 / 1024, 1).'MB > '
+                .round(self::MAX_VIDEO_BYTES / 1024 / 1024).'MB): '.$mediaUrl
+            );
+        }
     }
 
     protected function model(): string
     {
-        return (string) $this->config('model', 'gemini-2.5-flash');
+        return (string) $this->config('model', 'gemini-3.6-flash');
     }
 
     /**

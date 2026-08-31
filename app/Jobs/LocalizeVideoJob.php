@@ -50,18 +50,13 @@ class LocalizeVideoJob implements ShouldBeUnique, ShouldQueue
 
     public function failed(Throwable $exception): void
     {
-        // fail() zaten analyze() içinde çalıştı; burada yalnızca exception
-        // handler'ın yakalayamadığı erken ölümler (timeout vb.) düşer.
-        $localization = $this->localization->fresh();
+        // analyze() içinden fırlayan hatalarda fail() → markFailed() zaten
+        // çalışmıştır; burada yalnızca exception handler'ın yakalayamadığı
+        // erken ölümler (timeout, OOM vb.) düşer. markFailed idempotenttir:
+        // zaten failed olan kaydın ilk hata mesajının üzerine yazmaz.
+        $this->localization->fresh()?->markFailed($exception);
 
-        if ($localization !== null && $localization->status !== VideoLocalization::STATUS_FAILED) {
-            $localization->forceFill([
-                'status' => VideoLocalization::STATUS_FAILED,
-                'error_message' => $exception->getMessage(),
-            ])->save();
-        }
-
-        $team = $this->localization->content->team;
+        $team = $this->localization->content?->team;
 
         if ($team !== null) {
             app(NotificationService::class)->notifyPublishFailed(
