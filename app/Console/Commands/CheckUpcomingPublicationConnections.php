@@ -39,6 +39,7 @@ class CheckUpcomingPublicationConnections extends Command
         $publications = Publication::query()
             ->where('status', Publication::STATUS_SCHEDULED)
             ->whereBetween('scheduled_at', [now(), now()->addMinutes(self::LOOKAHEAD_MINUTES)])
+            ->with('instagramAccount')
             ->get();
 
         if ($publications->isEmpty()) {

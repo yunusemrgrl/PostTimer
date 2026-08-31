@@ -9,6 +9,7 @@ use App\Domain\Video\Services\GeminiVideoTranslationService;
 use Awcodes\Curator\Facades\Curator;
 use Awcodes\Curator\Facades\Glide;
 use Awcodes\Curator\Glide\SymfonyResponseFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\ServiceProvider;
@@ -38,6 +39,11 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // N+1 avı: lazy loading, production DIŞINDAKİ ortamlarda (local +
+        // testing) exception fırlatır — ihlaller geliştirme anında yakalanır.
+        // Production'da davranış değişmez (sessiz lazy load'a izin verilir).
+        Model::preventLazyLoading(! app()->isProduction());
+
         /**
          * ÖNEMLİ: super_admin rolüne sahip kullanıcılar, uygulamadaki
          * TÜM Gate/Policy kontrollerini otomatik olarak geçer.
@@ -55,6 +61,12 @@ class AppServiceProvider extends ServiceProvider
         // (staging, qa, preview, vs.) config eksikliğini erken yakalıyoruz.
         if (! app()->environment(['local', 'testing']) && blank(config('app.media_tenant_hash_key'))) {
             throw new RuntimeException('MEDIA_TENANT_HASH_KEY tanımlı değil — uygulama başlatılamıyor.');
+        }
+
+        // MCP endpoint'i "fail-open" kapıdır: token tanımsızsa JSON-RPC
+        // herkese açık kalır. Local/testing dışında token zorunludur.
+        if (! app()->environment(['local', 'testing']) && blank(config('media.mcp_token'))) {
+            throw new RuntimeException('MCP_TOKEN tanımlı değil — uygulama başlatılamıyor.');
         }
 
         // Media observer: app/Models/Media.php uzerindeki #[ObservedBy] attribute'u ile bind ediliyor.
