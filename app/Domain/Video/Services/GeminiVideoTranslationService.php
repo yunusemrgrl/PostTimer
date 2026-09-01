@@ -161,13 +161,22 @@ You are a professional video localizer. Analyze the attached video and produce S
   "segments": [
     {"start": <number, seconds>, "end": <number, seconds>, "translation": "<utterance translated into {$targetLanguage}>"}
   ],
-  "on_screen_text": ["<text visible on screen, kept in original language>"]
+  "on_screen_text": ["<text visible on screen, kept in original language>"],
+  "overlays": [
+    {"start": <seconds when the text appears, or null if visible from the beginning>,
+     "end": <seconds when it disappears, or null if visible until the end>,
+     "bbox": {"left": <0-100>, "top": <0-100>, "width": <0-100>, "height": <0-100>},
+     "text": "<the on-screen text as written>",
+     "translation": "<the same text translated into {$targetLanguage}>"}
+  ]
 }
 
 Rules:
 - Cover the ENTIRE spoken audio as ordered segments; do not merge different speakers or skip content.
 - Translate the meaning naturally (not word-by-word) into {$targetLanguage}.
-- on_screen_text may be empty; never invent text that is not visible.
+- Every text PERMANENTLY rendered on the video frame (speech bubbles, caption boxes, burned-in titles) MUST also appear in overlays: bbox is the text's background box as percentages of the frame measured from the top-left corner (left + width <= 100, top + height <= 100), padded slightly so it fully covers the text AND its background box/bubble.
+- One overlay entry per distinct text; start/end describe when it is visible on screen.
+- on_screen_text lists those same texts without position, kept in the original language. Both may be empty; never invent text that is not visible.
 - Output only the JSON object.
 PROMPT;
     }
@@ -227,10 +236,57 @@ PROMPT;
             }
         }
 
+        $overlays = [];
+
+        foreach ((array) ($decoded['overlays'] ?? []) as $overlay) {
+            if (! is_array($overlay)) {
+                continue;
+            }
+
+            $text = trim((string) ($overlay['text'] ?? ''));
+            $translation = trim((string) ($overlay['translation'] ?? ''));
+
+            if ($text === '' || $translation === '') {
+                continue;
+            }
+
+            $bbox = is_array($overlay['bbox'] ?? null) ? $overlay['bbox'] : [];
+
+            $left = $this->clampPercent($bbox['left'] ?? null);
+            $top = $this->clampPercent($bbox['top'] ?? null);
+            $width = $this->clampPercent($bbox['width'] ?? null);
+            $height = $this->clampPercent($bbox['height'] ?? null);
+
+            if ($left === null || $top === null || $width === null || $height === null) {
+                continue;
+            }
+
+            $overlays[] = [
+                'start' => is_numeric($overlay['start'] ?? null) ? max(0.0, (float) $overlay['start']) : null,
+                'end' => is_numeric($overlay['end'] ?? null) ? max(0.0, (float) $overlay['end']) : null,
+                'bbox' => ['left' => $left, 'top' => $top, 'width' => $width, 'height' => $height],
+                'text' => $text,
+                'translation' => $translation,
+            ];
+        }
+
         return [
             'source_language' => $sourceLanguage,
             'segments' => $segments,
             'on_screen_text' => $onScreenText,
+            'overlays' => $overlays,
         ];
+    }
+
+    /**
+     * Gemini bbox degerini (0-100 yuzde) dogrular; sayisal degilse null.
+     */
+    protected function clampPercent(mixed $value): ?float
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        return min(100.0, max(0.0, (float) $value));
     }
 }

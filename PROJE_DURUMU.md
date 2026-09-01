@@ -39,8 +39,10 @@ altında domain-özerk HTTP altyapısı.
 [Türkçe Seslendir] → GenerateVideoVoiceJob (queue) → ElevenLabs TTS (flash
                      model, ucuz) → MP3 R2'ye → "Ses Hazır" badge
 
-[Dublajlı Videoyu İndir] → ffmpeg.wasm (tarayıcıda, serverless-uyumlu):
-                           video + ses mux, isteğe bağlı SRT altyazı burn-in.
+[Dublajlı Videoyu İndir] → Mediabunny (tarayıcıda, serverless-uyumlu):
+                           composable conversion: video track'i bit-exact
+                           kopyalanır + TTS AAC mux; isteğe bağlı canvas
+                           altyazı burn-in (WebCodecs H.264 re-encode).
 ```
 
 ## Güvenlik & Üretime Hazırlık
@@ -55,7 +57,8 @@ altında domain-özerk HTTP altyapısı.
   / `LocalizationVoiceCompleted` event'leri listener'lar aracılığıyla
   Telegram'a iletiliyor (auto-discovery).
 - **Laravel Cloud (serverless):** FFmpeg sunucuya kurulamayacağı için video
-  birleştirme `ffmpeg.wasm` ile **tarayıcıda** yapılır — sunucu yüzeyi yok.
+  birleştirme **Mediabunny** (WebCodecs tabanlı tarayıcı medya toolkit) ile
+  **tarayıcıda** yapılır — sunucu yüzeyi yok.
 
 ## Kurallar (.ai/rules)
 
@@ -67,7 +70,7 @@ test yazmama tercihi (kullanıcı istemediği sürece).
 
 ```
 php artisan test --compact  →  199 passed (698 assertions)
-npm run build               →  video-dub.js + ffmpeg worker üretildi
+npm run build               →  video-dub.js + mediabunny chunk üretildi
 vendor/bin/pint             →  temiz
 ```
 

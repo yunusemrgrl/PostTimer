@@ -6,10 +6,17 @@ namespace App\Domain\Video\Services\Contracts;
  * Video analizi + hedef dile çeviri sağlayıcısı (Strategy kontratı).
  * Gemini implementasyonu: GeminiVideoTranslationService.
  *
+ * @phpstan-type OverlayBbox array{left: float, top: float, width: float, height: float}
+ * @phpstan-type OverlayPayload array{
+ *     start: float|null, end: float|null,
+ *     bbox: OverlayBbox,
+ *     text: string, translation: string
+ * }
  * @phpstan-type TranslationPayload array{
  *     source_language: string,
  *     segments: array<int, array{start: float, end: float, translation: string}>,
- *     on_screen_text: array<int, string>
+ *     on_screen_text: array<int, string>,
+ *     overlays: array<int, OverlayPayload>
  * }
  */
 interface VideoTranslationProvider

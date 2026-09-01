@@ -1,24 +1,3 @@
-/**
- * SRT (SubRip) ureteci — segment'lerden SRT formatina cevirir.
- * Pure fonksiyon. SRT export icin tutuldu; altyazi yakma canvas ile yapilir.
- */
-function buildSRT(segments) {
-    const fmt = (seconds) => {
-        const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
-        const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
-        const s = String(Math.floor(seconds % 60)).padStart(2, '0');
-        const ms = String(Math.round((seconds % 1) * 1000)).padStart(3, '0');
-        return `${h}:${m}:${s},${ms}`;
-    };
-    return segments
-        .filter((seg) => seg && seg.translation)
-        .map((seg, i) => `${i + 1}\n${fmt(seg.start)} --> ${fmt(seg.end)}\n${seg.translation}\n`)
-        .join('\n');
-}
-
-/**
- * Belirli bir zaman damgasinda aktif altyazi metnini bulur.
- */
 function getActiveSubtitle(segments, currentTime) {
     for (const seg of segments) {
         if (currentTime >= (seg.start ?? 0) && currentTime <= (seg.end ?? 0)) {
@@ -28,13 +7,6 @@ function getActiveSubtitle(segments, currentTime) {
     return null;
 }
 
-/**
- * Canvas uzerine Turkce karakter guvenli altyazi cizer.
- *
- * Browser native font engine kullandigi icin I/i/g/s/c/o/u gibi Turkce
- * karakterler ffmpeg libass'tan farkli olarak DAIMMA dogru render edilir.
- * Alt-orta konum, beyaz dolgu + siyah kontur, otomatik satir kaydirma.
- */
 function drawSubtitleToCanvas(ctx, text, videoWidth, videoHeight) {
     if (!text || !text.trim()) return;
 
@@ -48,7 +20,94 @@ function drawSubtitleToCanvas(ctx, text, videoWidth, videoHeight) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
 
-    // Otomatik satir kaydirma
+    const lines = wrapLines(ctx, text, maxWidth);
+
+    const centerX = videoWidth / 2;
+    const baseY = videoHeight - bottomMargin;
+
+    for (let i = lines.length - 1; i >= 0; i--) {
+        const y = baseY - (lines.length - 1 - i) * lineHeight;
+
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.lineWidth = Math.max(2, Math.round(fontSize * 0.14));
+        ctx.lineJoin = 'round';
+        ctx.strokeText(lines[i], centerX, y);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 1)';
+        ctx.fillText(lines[i], centerX, y);
+    }
+}
+
+function drawOverlaysToCanvas(ctx, overlays, seconds, videoWidth, videoHeight) {
+    for (const overlay of overlays || []) {
+        const start = overlay.start ?? 0;
+        const end = overlay.end ?? null;
+
+        if (seconds < start || (end !== null && seconds > end)) {
+            continue;
+        }
+
+        const b = overlay.bbox || {};
+        const padX = videoWidth * 0.015;
+        const padY = videoHeight * 0.01;
+
+        const x = Math.max(0, (b.left / 100) * videoWidth - padX);
+        const y = Math.max(0, (b.top / 100) * videoHeight - padY);
+        const boxW = Math.min(videoWidth - x, ((b.width / 100) * videoWidth) + padX * 2);
+        const boxH = Math.min(videoHeight - y, ((b.height / 100) * videoHeight) + padY * 2);
+
+        if (boxW < videoWidth * 0.05 || boxH < videoHeight * 0.015) {
+            continue;
+        }
+
+        const radius = Math.min(boxH * 0.2, 16);
+
+        ctx.save();
+
+        ctx.beginPath();
+        ctx.roundRect(x, y, boxW, boxH, radius);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.97)';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+        ctx.shadowBlur = Math.round(videoHeight * 0.006);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        const innerW = boxW * 0.88;
+        const innerH = boxH * 0.8;
+        let fontSize = Math.min(innerH * 0.55, videoHeight * 0.045);
+        let lineHeight = fontSize * 1.3;
+
+        ctx.font = `bold ${Math.round(fontSize)}px sans-serif`;
+        let lines = wrapLines(ctx, overlay.translation, innerW);
+
+        while (lines.length * lineHeight > innerH && fontSize > videoHeight * 0.012) {
+            fontSize -= Math.max(1, Math.round(fontSize * 0.06));
+            ctx.font = `bold ${Math.round(fontSize)}px sans-serif`;
+            lines = wrapLines(ctx, overlay.translation, innerW);
+            lineHeight = fontSize * 1.3;
+        }
+
+        ctx.fillStyle = 'rgba(17, 17, 17, 1)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const centerX = x + boxW / 2;
+        const totalHeight = lines.length * lineHeight;
+        let lineY = y + (boxH - totalHeight) / 2 + lineHeight / 2;
+
+        for (const line of lines) {
+            ctx.fillText(line, centerX, lineY);
+            lineY += lineHeight;
+        }
+
+        ctx.restore();
+    }
+}
+
+function wrapLines(ctx, text, maxWidth) {
     const words = text.split(/\s+/);
     const lines = [];
     let currentLine = '';
@@ -64,49 +123,9 @@ function drawSubtitleToCanvas(ctx, text, videoWidth, videoHeight) {
     }
     if (currentLine) lines.push(currentLine);
 
-    // Alt-orta konumda ciz (son satirdan yukari dogru)
-    const centerX = videoWidth / 2;
-    const baseY = videoHeight - bottomMargin;
-
-    for (let i = lines.length - 1; i >= 0; i--) {
-        const y = baseY - (lines.length - 1 - i) * lineHeight;
-
-        // Siyah kontur (outline)
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
-        ctx.lineWidth = Math.max(2, Math.round(fontSize * 0.14));
-        ctx.lineJoin = 'round';
-        ctx.strokeText(lines[i], centerX, y);
-
-        // Beyaz dolgu
-        ctx.fillStyle = 'rgba(255, 255, 255, 1)';
-        ctx.fillText(lines[i], centerX, y);
-    }
+    return lines;
 }
 
-/**
- * Dublaj: orijinal video + Turkce sesi (ve istege bagli altyaziyi)
- * tarayicida birlestirip indirir.
- *
- * ffmpeg.wasm (WebAssembly) tarayicida calisir — sunucuya FFmpeg kurmak
- * gerekmez (serverless uyumlu). Alpine.js component olarak register edilir.
- *
- * Altyazi yakma (burnSubtitles=true):
- *   ffmpeg libass/subtitles filtresi KULLANILMAZ — standart ffmpeg.wasm
- *   core'unda font paketlenmedigi icin Turkce karakterler bozuk cikar.
- *   Bunun yerine canvas hard-burn yaklasimi:
- *   1. <video> elementinden kareler seek edilerek cikarilir
- *   2. Her kare canvas'a cizilir + altyazi text overlay (browser native font)
- *   3. Canvas JPEG olarak ffmpeg.wasm FS'ye yazilir
- *   4. ffmpeg: image2 -> libx264 + aac encode (TTS ses ile mux)
- *
- * Altyazi kapali (burnSubtitles=false):
- *   Hizli mux: -c:v copy -c:a aac -shortest (video yeniden kodlanmaz).
- */
-// Alpine component kaydi: modul scriptimiz, Filament'in Alpine'ini
-// (alpine:init olayi) kurmasindan once de sonra da yuklenebilir. Olay
-// dispatch edilmisse (window.Alpine tanimliysa) bir dinleyici olayi
-// kacirir ve component hic tanimlanmaz — modalda "dubCombiner is not
-// defined" bunun sonucuydu. Iki durumu da guvenli kapsayan kayit:
 function registerAlpineComponent(name, definition) {
     const register = () => Alpine.data(name, definition);
 
@@ -117,11 +136,14 @@ function registerAlpineComponent(name, definition) {
     }
 }
 
-registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments = [], burnSubtitles = false) => ({
+registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments = [], burnSubtitles = false, overlays = []) => ({
         videoUrl,
         audioUrl,
         outputName: outputName || 'dublaj',
         segments,
+        overlays: Array.isArray(overlays)
+            ? overlays.filter((o) => o && o.bbox && o.translation)
+            : [],
         burnSubtitles,
         busy: false,
         status: 'Orijinal video + Turkce sesi tarayicida birlestirir.',
@@ -132,36 +154,97 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
 
             this.busy = true;
             this.progress = 0;
-            this.status = 'ffmpeg yukleniyor…';
+            this.status = 'Hazirlanıyor…';
 
             try {
-                const { FFmpeg } = await import('@ffmpeg/ffmpeg');
-                const ffmpeg = new FFmpeg();
-
-                ffmpeg.on('progress', ({ progress }) => {
-                    this.progress = Math.max(0, Math.min(100, Math.round(progress * 100)));
-                });
-
-                await ffmpeg.load();
-
-                // Turkce sesi indir
-                this.status = 'Ses indiriliyor…';
-                const audioData = await (await fetch(this.audioUrl)).arrayBuffer();
-                await ffmpeg.writeFile('input.mp3', new Uint8Array(audioData));
+                const {
+                    ALL_FORMATS,
+                    AudioBufferSource,
+                    BufferTarget,
+                    Conversion,
+                    Input,
+                    Mp4OutputFormat,
+                    Output,
+                    Quality,
+                    UrlSource,
+                } = await import('mediabunny');
 
                 const hasSegments = Array.isArray(this.segments) && this.segments.length > 0;
-                const burn = this.burnSubtitles && hasSegments;
+                const hasOverlays = Array.isArray(this.overlays) && this.overlays.length > 0;
+                const burn = (this.burnSubtitles && hasSegments) || hasOverlays;
+
+                this.status = 'Video analiz ediliyor…';
+                const input = new Input({ source: new UrlSource(this.videoUrl), formats: ALL_FORMATS });
+                const duration = await input.computeDuration();
+
+                this.status = 'Turkce ses hazirlaniyor…';
+                this.progress = 5;
+                const audioBuffer = await this.prepareDubAudio(this.audioUrl, duration);
+                await this.assertAacSupport(audioBuffer.sampleRate, audioBuffer.numberOfChannels);
+
+                const output = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() });
+
+                const options = {
+                    input,
+                    output,
+                    audio: { discard: true },
+                    composable: true,
+                };
 
                 if (burn) {
-                    await this.burnSubtitlesPath(ffmpeg);
-                } else {
-                    await this.fastMuxPath(ffmpeg);
+                    let ctx = null;
+                    options.video = {
+                        codec: 'avc',
+                        quality: new Quality({ bitrate: 1500000 }),
+                        process: (sample) => {
+                            if (!ctx) {
+                                const canvas = new OffscreenCanvas(sample.displayWidth, sample.displayHeight);
+                                ctx = canvas.getContext('2d');
+                            }
+
+                            sample.draw(ctx, 0, 0);
+
+                            drawOverlaysToCanvas(ctx, this.overlays, sample.timestamp, sample.displayWidth, sample.displayHeight);
+
+                            const subtitle = getActiveSubtitle(this.segments, sample.timestamp);
+                            if (subtitle) {
+                                drawSubtitleToCanvas(ctx, subtitle, sample.displayWidth, sample.displayHeight);
+                            }
+
+                            return ctx.canvas;
+                        },
+                    };
                 }
 
-                // Ciktiyi indir
-                this.status = 'Hazirlaniyor…';
-                const data = await ffmpeg.readFile('output.mp4');
-                this.downloadBlob(data, burn);
+                const conversion = await Conversion.init(options);
+
+                if (!conversion.isValid) {
+                    throw new Error('Video bu tarayicida islenemedi (codec/konteyner uyumsuz).');
+                }
+
+                conversion.onProgress = (progress) => {
+                    this.progress = Math.max(this.progress, 10 + Math.round(progress * 85));
+                };
+
+                const audioSource = new AudioBufferSource({
+                    codec: 'aac',
+                    quality: new Quality({ bitrate: 128000 }),
+                });
+                output.addAudioTrack(audioSource);
+
+                await output.start();
+
+                this.status = burn ? 'Video altyaziyla yeniden kodlaniyor…' : 'Video kopyalanip ses gomuluyor…';
+                await Promise.all([
+                    conversion.execute(),
+                    audioSource.add(audioBuffer).then(() => audioSource.close()),
+                ]);
+
+                await output.finalize();
+
+                this.status = 'Dosya hazirlaniyor…';
+                const blob = new Blob([output.target.buffer], { type: 'video/mp4' });
+                this.downloadBlob(blob, burn);
             } catch (err) {
                 console.error('Dub combine failed:', err);
                 this.status = 'Hata: ' + (err.message || 'tekrar deneyin.');
@@ -170,106 +253,44 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
             }
         },
 
-        /**
-         * Hizli mux: video kopyalanir, sadece ses gomulur.
-         */
-        async fastMuxPath(ffmpeg) {
-            this.status = 'Video indiriliyor…';
-            const videoData = await (await fetch(this.videoUrl)).arrayBuffer();
-            await ffmpeg.writeFile('input.mp4', new Uint8Array(videoData));
+        async prepareDubAudio(url, videoDuration) {
+            const audioData = await (await fetch(url, { mode: 'cors' })).arrayBuffer();
 
-            this.status = 'Birlestiriliyor…';
-            await ffmpeg.exec([
-                '-i', 'input.mp4',
-                '-i', 'input.mp3',
-                '-c:v', 'copy',
-                '-c:a', 'aac',
-                '-shortest',
-                'output.mp4',
-            ]);
+            const decodeContext = new (window.AudioContext || window.webkitAudioContext)();
+            const decoded = await decodeContext.decodeAudioData(audioData);
+            await decodeContext.close();
+
+            const sampleRate = 44100;
+            const channels = 2;
+            const length = Math.max(1, Math.ceil(videoDuration * sampleRate));
+
+            const offline = new OfflineAudioContext(channels, length, sampleRate);
+            const source = offline.createBufferSource();
+            source.buffer = decoded;
+            source.connect(offline.destination);
+            source.start();
+
+            return offline.startRendering();
         },
 
-        /**
-         * Canvas overlay ile altyazi yakma (hard-burn):
-         * 1. Video kareleri seek ile cikarilir
-         * 2. Her kareye canvas uzerinden Turkce-guvenli altyazi cizilir
-         * 3. JPEG kareler ffmpeg.wasm ile encode edilir
-         *
- * Referans: ffmpeg-webCLI hard-burn yaklasimi (canvas frame overlay).
-         */
-        async burnSubtitlesPath(ffmpeg) {
-            this.status = 'Video kareleri cikariliyor…';
+        async assertAacSupport(sampleRate, numberOfChannels) {
+            if (typeof AudioEncoder === 'undefined') {
+                throw new Error('Tarayiciniz WebCodecs desteklemiyor. Chrome veya Edge kullanin.');
+            }
 
-            const video = document.createElement('video');
-            video.crossOrigin = 'anonymous';
-            video.muted = true;
-            video.playsInline = true;
-            video.src = this.videoUrl;
-
-            // Metadata bekle
-            await new Promise((resolve, reject) => {
-                video.onloadedmetadata = resolve;
-                video.onerror = () => reject(new Error('Video yuklenemedi (CORS hatasi — R2 CORS header\'lari gerekir).'));
+            const { supported } = await AudioEncoder.isConfigSupported({
+                codec: 'mp4a.40.2',
+                sampleRate,
+                numberOfChannels,
+                bitrate: 128000,
             });
 
-            const w = video.videoWidth;
-            const h = video.videoHeight;
-            const fps = 24; // Altyazi icin yeterli, islem suresini kisaltir
-            const totalFrames = Math.min(Math.ceil(video.duration * fps), 2400);
-
-            const canvas = document.createElement('canvas');
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d');
-
-            for (let i = 0; i < totalFrames; i++) {
-                const time = i / fps;
-
-                // Seek to frame
-                video.currentTime = time;
-                await new Promise((resolve) => {
-                    video.onseeked = resolve;
-                });
-
-                // Video karesini canvas'a ciz
-                ctx.drawImage(video, 0, 0, w, h);
-
-                // Altyazi overlay (Turkce karakter guvenli, browser native font)
-                const subtitle = getActiveSubtitle(this.segments, time);
-                if (subtitle) {
-                    drawSubtitleToCanvas(ctx, subtitle, w, h);
-                }
-
-                // JPEG olarak ffmpeg FS'ye yaz
-                const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
-                const arr = new Uint8Array(await blob.arrayBuffer());
-                await ffmpeg.writeFile(`frame_${String(i).padStart(6, '0')}.jpg`, arr);
-
-                this.status = `Kareler isleniyor… ${i + 1}/${totalFrames}`;
-                this.progress = Math.round(((i + 1) / totalFrames) * 70);
-            }
-
-            // Encode: JPEG kareler + TTS ses -> MP4
-            this.status = 'Video encode ediliyor…';
-            await ffmpeg.exec([
-                '-framerate', String(fps),
-                '-i', 'frame_%06d.jpg',
-                '-i', 'input.mp3',
-                '-c:v', 'libx264',
-                '-pix_fmt', 'yuv420p',
-                '-c:a', 'aac',
-                '-shortest',
-                'output.mp4',
-            ]);
-
-            // Gecici kareleri temizle
-            for (let i = 0; i < totalFrames; i++) {
-                await ffmpeg.deleteFile(`frame_${String(i).padStart(6, '0')}.jpg`);
+            if (!supported) {
+                throw new Error('Tarayiciniz AAC ses kodlamasini desteklemiyor. Chrome veya Edge kullanin.');
             }
         },
 
-        downloadBlob(data, burn) {
-            const blob = new Blob([data.buffer], { type: 'video/mp4' });
+        downloadBlob(blob, burn) {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -283,18 +304,6 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
         },
     }));
 
-/**
- * Wavesurfer.js waveform onizleme component'i (Alpine).
- *
- * BSD-3-Clause licansli wavesurfer.js ile Turkce sesin waveform'unu
- * gosterir. Lazy load — ilk render'da import edilir, x-init ile baslatilir.
- *
- * Kullanim (blade):
- *   <div x-data="audioWaveformer(@js($audioUrl))" x-init="init()">
- *     <div x-ref="waveform"></div>
- *     <button x-on:click="toggle" x-text="playing ? 'Durdur' : 'Oynat'"></button>
- *   </div>
- */
 registerAlpineComponent('audioWaveformer', (audioUrl) => ({
         audioUrl,
         wavesurfer: null,

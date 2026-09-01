@@ -13,6 +13,7 @@
     ];
     $segments = $localization->translation['segments'] ?? [];
     $onScreenText = $localization->translation['on_screen_text'] ?? [];
+    $overlays = $localization->translation['overlays'] ?? [];
     $fmt = fn ($seconds): string => sprintf('%02d:%02d', (int) floor(((float) $seconds) / 60), (int) ((float) $seconds) % 60);
 @endphp
 
@@ -148,7 +149,8 @@
                         @js($localization->audioMedia->url),
                         @js('dublaj-'.$localization->content_id),
                         @js($segments),
-                        false
+                        false,
+                        @js($overlays)
                     )"
                     class="mt-3 space-y-2"
                 >
