@@ -14,6 +14,10 @@ namespace App\Domain\Video\Services\Contracts;
  * }
  * @phpstan-type TranslationPayload array{
  *     source_language: string,
+ *     already_in_target_language: bool,
+ *     has_burned_in_subtitles: bool,
+ *     burned_in_subtitle_language: string|null,
+ *     detection_reason: string|null,
  *     segments: array<int, array{start: float, end: float, translation: string}>,
  *     on_screen_text: array<int, string>,
  *     overlays: array<int, OverlayPayload>

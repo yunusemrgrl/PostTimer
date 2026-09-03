@@ -26,6 +26,8 @@ enum LocalizationStatus: string implements HasColor, HasLabel
 
     case Completed = 'completed';
 
+    case Skipped = 'skipped';
+
     case Failed = 'failed';
 
     public function getLabel(): ?string
@@ -36,6 +38,7 @@ enum LocalizationStatus: string implements HasColor, HasLabel
             self::Analyzed => 'Çevrildi',
             self::Voicing => 'Seslendiriliyor',
             self::Completed => 'Tamamlandı',
+            self::Skipped => 'Yerelleştirme Gerekmez',
             self::Failed => 'Başarısız',
         };
     }
@@ -53,10 +56,11 @@ enum LocalizationStatus: string implements HasColor, HasLabel
 
         return in_array($to, match ($this) {
             self::Pending => [self::Analyzing],
-            self::Analyzing => [self::Analyzed],
+            self::Analyzing => [self::Analyzed, self::Skipped],
             self::Analyzed => [self::Voicing, self::Analyzing],
             self::Voicing => [self::Completed],
             self::Completed => [self::Analyzing],
+            self::Skipped => [self::Analyzing],
             self::Failed => [self::Analyzing],
         }, true);
     }
@@ -65,7 +69,9 @@ enum LocalizationStatus: string implements HasColor, HasLabel
     {
         return match ($this) {
             self::Completed => 'success',
+            self::Analyzed => 'info',
             self::Pending, self::Analyzing, self::Voicing => 'warning',
+            self::Skipped => 'gray',
             self::Failed => 'danger',
         };
     }

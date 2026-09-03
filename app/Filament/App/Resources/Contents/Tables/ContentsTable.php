@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\Contents\Tables;
 
 use App\Domain\Video\Enums\LocalizationLanguage;
 use App\Domain\Video\Enums\LocalizationStatus;
+use App\Filament\App\Resources\Contents\ContentResource;
 use App\Jobs\GenerateVideoVoiceJob;
 use App\Jobs\LocalizeVideoJob;
 use App\Models\Content;
@@ -12,6 +13,7 @@ use App\Models\Publication;
 use App\Models\VideoLocalization;
 use Carbon\Carbon;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -23,9 +25,11 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Tables\Columns\Layout\View as LayoutView;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
 class ContentsTable
@@ -33,6 +37,9 @@ class ContentsTable
     public static function configure(Table $table): Table
     {
         return $table
+            // Kart görünümünde product ilişkisine erişilir (lazy loading kapalı
+            // olduğunda da çalışsın diye eager-load) + N+1 koruması.
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['product']))
             ->columns([
                 TextColumn::make('surface')
                     ->label('Tür')
@@ -65,10 +72,10 @@ class ContentsTable
                     ->badge()
                     ->color('gray'),
 
-                // AI Çeviri pipeline durumu (optimistic: job koşarken badge
+                // AI Dublaj pipeline durumu (optimistic: job koşarken badge
                 // "Analiz ediliyor"/"Seslendiriliyor" gösterir, poll ile güncellenir).
                 TextColumn::make('localization_status')
-                    ->label('AI Çeviri')
+                    ->label('AI Dublaj')
                     ->state(function (Content $record): ?LocalizationStatus {
                         /** @var VideoLocalization|null $localization */
                         $localization = VideoLocalization::latestFor($record);
@@ -88,6 +95,16 @@ class ContentsTable
                     ->dateTime('d.m.Y')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+
+                // Kart görünümü: grid'de yalnızca bu layout component'i render
+                // edilir; TextColumn'lar search/column-manager için columns()
+                // içinde kalmaya devam eder.
+                LayoutView::make('filament.app.resources.contents.content-card'),
+            ])
+            ->contentGrid([
+                'sm' => 2,
+                'xl' => 3,
+                '2xl' => 4,
             ])
             ->filters([
                 SelectFilter::make('type')
@@ -101,12 +118,20 @@ class ContentsTable
             // Optimistic UI: kuyruktaki AI job'ları ilerledikçe "AI Çeviri"
             // badge'i otomatik güncellenir (polling).
             ->poll('10s')
+            // Kart görünümünde aksiyonlar tek bir "⋯" menüsüne toplanır;
+            // kartın kendisi de tıklanınca düzenleme sayfasına gider.
+            ->recordUrl(fn (Content $record): string => ContentResource::getUrl('edit', ['record' => $record]))
             ->recordActions([
-                EditAction::make(),
-                self::localizeAction(),
-                self::viewLocalizationAction(),
-                self::generateVoiceAction(),
-                DeleteAction::make()->label('Sil'),
+                ActionGroup::make([
+                    EditAction::make(),
+                    self::localizeAction(),
+                    self::viewLocalizationAction(),
+                    self::generateVoiceAction(),
+                    DeleteAction::make()->label('Sil'),
+                ])
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->iconButton()
+                    ->tooltip('İşlemler'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -118,8 +143,9 @@ class ContentsTable
     }
 
     /**
-     * "AI Çeviri": Videoyu Gemini 2.5 Flash'a gönderir; konuşmayı
-     * timestamp'li olarak hedef dile çevirir + ekrandaki yazıları çevirir.
+     * "AI Dublaj" (1. adım): Videoyu Gemini'ye gönderir; konuşmayı
+     * timestamp'li olarak hedef dile çevirir + ekrandaki yazıları çevirir
+     * ve videoyu hedef dilde tespit ederse akışı atlar (Skipped).
      * LocalizeVideoJob kuyruğuna dispatch edilir.
      *
      * Pilot kuralı: Sonuç otomatik yayına GITMEZ — kullanıcı çeviriyi
@@ -128,8 +154,8 @@ class ContentsTable
     private static function localizeAction(): Action
     {
         return Action::make('localizeVideo')
-            ->label('AI Çeviri')
-            ->icon('heroicon-m-language')
+            ->label('AI Dublaj')
+            ->icon('heroicon-m-globe-alt')
             ->color('warning')
             ->visible(fn (Content $record): bool => $record->isVideo())
             ->requiresConfirmation()
@@ -140,8 +166,8 @@ class ContentsTable
                     ->default('tr')
                     ->required(),
             ])
-            ->modalHeading('AI Video Çevirisi Başlat')
-            ->modalDescription('Video, Gemini tarafından analiz edilir: konuşma timestamp\'leriyle hedef dile çevrilir ve ekrandaki yazılar tercüme edilir. İşlem birkaç dakika sürebilir; tamamlandığında Telegram\'dan bildirim alırsınız.')
+            ->modalHeading('AI Dublaj Başlat')
+            ->modalDescription('Üç adımlı akış: 1) Gemini videoyu analiz eder — konuşmayı ve ekrandaki yazıları hedef dile çevirir. 2) Çeviriyi panelde incelersin. 3) Seslendirmeyi başlatır, dublajlı videoyu indirirsin. Video zaten hedef dildeyse (gömülü altyazı vb.) Gemini bunu tespit eder ve işlem atlanır. İşlem birkaç dakika sürebilir; Telegram’dan bildirim alırsın.')
             ->action(function (Content $record, array $data): void {
                 $language = LocalizationLanguage::from((string) ($data['target_language'] ?? 'tr'));
 
@@ -152,27 +178,31 @@ class ContentsTable
 
                 Notification::make()
                     ->success()
-                    ->title('Çeviri kuyruğa alındı')
-                    ->body('Gemini analizi tamamlandığında video burada güncellenecek — otomatik yayına gitmeyecek.')
+                    ->title('Analiz kuyruğa alındı')
+                    ->body('Gemini videoyu inceleyip çeviriyi hazırlayacak — otomatik yayına gitmeyecek. Tamamlandığında Telegram’dan bildirim alacaksın.')
                     ->send();
             });
     }
 
     /**
-     * "Yerelleştirme Sonucu": En son yerelleştirme kaydını modalda
+     * "Dublaj Durumu": En son yerelleştirme kaydını slide-over panelde
      * gösterir — timestamp'li segmentler, ekrandaki yazılar, anlatım
-     * metni ve üretilmişse Türkçe ses önizlemesi.
+     * metni ve üretilmişse hedef dil ses önizlemesi.
      */
     private static function viewLocalizationAction(): Action
     {
         return Action::make('viewLocalization')
-            ->label('Yerelleştirme Sonucu')
+            ->label('Dublaj Durumu')
             ->icon('heroicon-m-clipboard-document-list')
             ->color('gray')
             ->visible(fn (Content $record): bool => VideoLocalization::query()
                 ->where('content_id', $record->id)
                 ->exists())
-            ->modalHeading('Yerelleştirme Sonucu')
+            ->modalHeading('AI Dublaj Durumu')
+            // Yan panel: içerik uzun olduğunda ekranı kaplayan koca dialog
+            // yerine sağdan kayan, odaklı bir görünüm.
+            ->slideOver()
+            ->modalWidth('xl')
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Kapat')
             ->modalContent(fn (Content $record) => view('filament.video-localization-result', [
@@ -191,7 +221,7 @@ class ContentsTable
     private static function generateVoiceAction(): Action
     {
         return Action::make('generateVoice')
-            ->label('Türkçe Seslendir')
+            ->label('Seslendirmeyi Başlat')
             ->icon('heroicon-m-speaker-wave')
             ->color('success')
             ->visible(function (Content $record): bool {
@@ -203,11 +233,12 @@ class ContentsTable
 
                 return $localization !== null
                     && $localization->isAnalyzed()
+                    && filled($localization->script)
                     && ! $localization->hasAudio();
             })
             ->requiresConfirmation()
-            ->modalHeading('Türkçe Seslendirmeyi Başlat')
-            ->modalDescription('Çevrilen metin, yapılandırılmış varsayılan ses ile seslendirilir ve MP3 olarak R2\'ye yüklenir. Oluşan ses + script Edits/final montaj için hazırdır.')
+            ->modalHeading('AI Seslendirme Başlat')
+            ->modalDescription('Dublaj akışının 3. adımı: çevrilen metin, yapılandırılmış varsayılan ses ile seslendirilir ve MP3 olarak R2’ye yüklenir. Oluşan ses + script final montaj/dublaj indirme için hazırdır.')
             ->action(function (Content $record): void {
                 /** @var VideoLocalization|null $localization */
                 $localization = VideoLocalization::query()
@@ -218,7 +249,7 @@ class ContentsTable
                 if ($localization === null || ! $localization->isAnalyzed()) {
                     Notification::make()
                         ->danger()
-                        ->title('Önce AI Çeviri çalıştırılmalı')
+                        ->title('Önce AI Dublaj çalıştırılmalı')
                         ->send();
 
                     return;

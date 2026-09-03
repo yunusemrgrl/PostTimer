@@ -134,6 +134,9 @@ class ContentForm
                         Textarea::make('caption')
                             ->label('Açıklama')
                             ->maxLength(2200)
+                            // Canlı önizleme paneli caption'ı entangle ile okur;
+                            // live(debounce) sayesinde yazarken akıcı güncellenir.
+                            ->live(debounce: 600)
                             ->columnSpanFull(),
 
                         // Story → Link Sticker

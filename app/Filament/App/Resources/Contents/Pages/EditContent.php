@@ -14,6 +14,9 @@ use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\View;
+use Filament\Schemas\Schema;
 use Illuminate\Support\Collection;
 
 class EditContent extends EditRecord
@@ -27,6 +30,27 @@ class EditContent extends EditRecord
 
             DeleteAction::make(),
         ];
+    }
+
+    /**
+     * CreateContent ile aynı editör düzeni; ilişki yöneticileri (yayınlar)
+     * grid'in altında kalmaya devam eder.
+     */
+    public function content(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                Grid::make(['default' => 1, '2xl' => 5])
+                    ->schema([
+                        $this->getFormContentComponent()
+                            ->columnSpan(['default' => 1, '2xl' => 3]),
+
+                        View::make('filament.app.components.content-preview')
+                            ->columnSpan(['default' => 1, '2xl' => 2]),
+                    ]),
+
+                $this->getRelationManagersContentComponent(),
+            ]);
     }
 
     /**

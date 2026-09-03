@@ -12,4 +12,10 @@ class MediaResource extends CuratorMediaResource
     protected static ?string $model = Media::class;
 
     protected static ?string $tenantOwnershipRelationshipName = 'team';
+
+    /**
+     * Liste görünümü karakteristik MediaLibrary sayfasına taşındı; Curator
+     * resource'u yalnızca picker/create akışları için arka planda çalışır.
+     */
+    protected static bool $shouldRegisterNavigation = false;
 }

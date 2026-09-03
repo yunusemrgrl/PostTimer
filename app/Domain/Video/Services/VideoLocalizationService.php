@@ -86,10 +86,34 @@ class VideoLocalizationService
                 $localization->target_language->value,
             );
 
+            // Akıllı atlama: Gemini videoyu analiz etti ve "izleyici bu videoyu
+            // zaten hedef dilde takip edebilir" dedi (konuşma hedef dilde YA DA
+            // videoya gömülü altyazı hedef dilde). Çeviri/seslendirme akışına
+            // girmeden kaydı Skipped'a al; ücretli TTS'e hiç girme.
+            if ((bool) ($translation['already_in_target_language'] ?? false)) {
+                $localization = $localization->transitionTo(LocalizationStatus::Skipped, [
+                    'source_language' => $translation['source_language'],
+                    'translation' => $translation,
+                    'script' => null,
+                    'error_message' => null,
+                ]);
+
+                $this->log($localization, 'localization.skipped', [
+                    'reason' => $translation['detection_reason'] ?? 'already_in_target_language',
+                    'burned_in_subtitle_language' => $translation['burned_in_subtitle_language'] ?? null,
+                ]);
+
+                LocalizationAnalyzed::dispatch($localization);
+
+                return;
+            }
+
             $localization = $localization->transitionTo(LocalizationStatus::Analyzed, [
                 'source_language' => $translation['source_language'],
                 'translation' => $translation,
-                'script' => $this->buildScript($translation),
+                // Sadece ekran yazısı çevrilecek videolarda (konuşmasız,
+                // müzikli reklamlar) seslendirilecek script olmaz.
+                'script' => $translation['segments'] !== [] ? $this->buildScript($translation) : null,
                 'error_message' => null,
             ]);
 

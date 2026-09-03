@@ -1,0 +1,79 @@
+@import 'tailwindcss';
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+@source '../../../../app/Filament/**/*';
+@source '../../../../resources/views/filament/**/*';
+
+@theme {
+    --font-sans:
+        'DM Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+/*
+ * PostTimer karakter katmanı.
+ *
+ * Kimlik: koyu mürekkep (slate-950) konturlar + teal vurgu + amber ışık.
+ * Filament'in kendi CSS değişkenlerini ve sınıf isimlerini override eder;
+ * hiçbir bileşen davranışı (Livewire binding, validation) etkilenmez.
+ */
+
+@layer theme {
+    :root {
+        --pt-ink: rgb(9 22 29);
+        --pt-ink-soft: rgb(15 42 52);
+    }
+}
+
+/* --- Birincil butonlar: "damgalı" neo-brutalist görünüm ------------------ */
+
+.fi-btn.fi-color-primary {
+    border: 2px solid var(--pt-ink);
+    border-radius: 0.75rem;
+    box-shadow: 3px 3px 0 0 var(--pt-ink);
+    font-weight: 600;
+    transition:
+        transform 0.12s ease,
+        box-shadow 0.12s ease;
+}
+
+.fi-btn.fi-color-primary:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 0 var(--pt-ink);
+}
+
+.fi-btn.fi-color-primary:active {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 0 var(--pt-ink);
+}
+
+/* --- Sidebar: aktif öğe "pill", grup başlıkları daha havadar ------------- */
+
+.fi-sidebar-item-btn.fi-active {
+    border-radius: 9999px;
+}
+
+.fi-sidebar-group-btn {
+    letter-spacing: 0.04em;
+}
+
+/* --- Bölümler: kalın kontur + yumuşak gölge (kart karakteri) ------------- */
+
+.fi-section {
+    border: 1.5px solid color-mix(in oklab, var(--pt-ink) 14%, transparent);
+    border-radius: 1rem;
+    box-shadow: 2px 2px 0 0 color-mix(in oklab, var(--pt-ink) 8%, transparent);
+}
+
+.dark .fi-section {
+    border-color: rgb(255 255 255 / 0.12);
+    box-shadow: 2px 2px 0 0 rgb(0 0 0 / 0.4);
+}
+
+/* --- Rozetler: hap biçimi, daha belirgin ---------------------------------- */
+
+.fi-badge {
+    border-radius: 9999px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}

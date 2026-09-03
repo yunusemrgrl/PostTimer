@@ -149,7 +149,13 @@ class GeminiVideoTranslationService extends AbstractExternalApiClient implements
 
     /**
      * Gemini'ye gonderilen talimat: timestamp'li segment cevirileri,
-     * ekrandaki yazilar ve tespit edilen kaynak dil — siki JSON semasi.
+     * ekrandaki yazilar, tespit edilen kaynak dil VE zaten hedef dilde
+     * olup olmadigi tespiti — siki JSON semasi.
+     *
+     * Ceviri kurallari iletide gomulu: gorsel senkron (karede olan hareket/
+     * urun), konusma temposu (segment suresine sigacak uzunluk) ve
+     * tanitim tonu — kullanıcının manuel "videoya uygun cevir" talimatının
+     * otomatiklesmis hali.
      */
     protected function buildPrompt(string $targetLanguage): string
     {
@@ -158,6 +164,12 @@ You are a professional video localizer. Analyze the attached video and produce S
 
 {
   "source_language": "<ISO 639-1 code of the detected spoken language>",
+  "detection": {
+    "has_burned_in_subtitles": <true if subtitles/typeset text are already burned into the video frames, else false>,
+    "burned_in_subtitle_language": "<ISO 639-1 code of the burned-in subtitle language, or null>",
+    "already_in_target_language": <true if the viewer can already follow the video in {$targetLanguage} without any further work>,
+    "reason": "<one short sentence explaining the already_in_target_language decision>"
+  },
   "segments": [
     {"start": <number, seconds>, "end": <number, seconds>, "translation": "<utterance translated into {$targetLanguage}>"}
   ],
@@ -172,6 +184,10 @@ You are a professional video localizer. Analyze the attached video and produce S
 }
 
 Rules:
+- Set "already_in_target_language" to TRUE when the video already communicates in {$targetLanguage}: the speech itself is {$targetLanguage}, OR burned-in subtitles/typeset text shown on the frames are {$targetLanguage} (e.g. a foreign-language video that already carries {$targetLanguage} subtitles). It must be FALSE when the viewer would need a translation or dubbing to follow it in {$targetLanguage}.
+- VISUAL SYNC: watch what is happening on screen at every moment (hands, products, text, scene changes). Each segment translation must match what the viewer is seeing at that timestamp — reference the product or action being shown when the speaker refers to it ("this", "here", "look at that" must map to what is actually on screen).
+- SPEECH PACING: the translated line must be naturally speakable within its segment window (start→end) at a normal narration pace of roughly 2.5–3 words per second in {$targetLanguage}. Condense rather than overflow; never leave a translation that clearly cannot fit its time window.
+- PROMOTIONAL TONE: if the video is an ad or product showcase, translate as a native {$targetLanguage} advertising script that sells the product — natural, punchy, persuasive — NOT a literal word-by-word translation. Keep the same meaning, calls to action and emojis inside burned text.
 - Cover the ENTIRE spoken audio as ordered segments; do not merge different speakers or skip content.
 - Translate the meaning naturally (not word-by-word) into {$targetLanguage}.
 - Every text PERMANENTLY rendered on the video frame (speech bubbles, caption boxes, burned-in titles) MUST also appear in overlays: bbox is the text's background box as percentages of the frame measured from the top-left corner (left + width <= 100, top + height <= 100), padded slightly so it fully covers the text AND its background box/bubble.
@@ -202,6 +218,15 @@ PROMPT;
             throw new RuntimeException('Gemini yanitinda source_language eksik.');
         }
 
+        // Zaten hedef dilde tespiti: videoya gömülü altyazı hedef dildeyse
+        // ya da konuşma doğrudan hedef dildeyse çeviri/seslendirme gereksizdir.
+        $detection = is_array($decoded['detection'] ?? null) ? $decoded['detection'] : [];
+
+        $alreadyInTargetLanguage = filter_var(
+            $detection['already_in_target_language'] ?? false,
+            FILTER_VALIDATE_BOOL,
+        );
+
         $segments = [];
 
         foreach ((array) ($decoded['segments'] ?? []) as $segment) {
@@ -220,10 +245,6 @@ PROMPT;
                 'end' => (float) ($segment['end'] ?? 0),
                 'translation' => $translation,
             ];
-        }
-
-        if ($segments === []) {
-            throw new RuntimeException('Gemini yanitinda cevrilmis segment yok.');
         }
 
         $onScreenText = [];
@@ -270,8 +291,26 @@ PROMPT;
             ];
         }
 
+        if ($segments === [] && ! $alreadyInTargetLanguage && $overlays === []) {
+            // Konuşma yok ve yakılacak ekran yazısı da yok — anlamlı bir
+            // çeviri çıktısı üretilememiş (ör. sadece müzik + Gemınin
+            // metin okuyamadığı kareler). Bu durumda analiz başarısız sayılır.
+            throw new RuntimeException('Gemini yanitinda cevrilmis segment yok.');
+        }
+
         return [
             'source_language' => $sourceLanguage,
+            'already_in_target_language' => $alreadyInTargetLanguage,
+            'has_burned_in_subtitles' => (bool) filter_var(
+                $detection['has_burned_in_subtitles'] ?? false,
+                FILTER_VALIDATE_BOOL,
+            ),
+            'burned_in_subtitle_language' => filled($detection['burned_in_subtitle_language'] ?? null)
+                ? strtolower(trim((string) $detection['burned_in_subtitle_language']))
+                : null,
+            'detection_reason' => filled($detection['reason'] ?? null)
+                ? trim((string) $detection['reason'])
+                : null,
             'segments' => $segments,
             'on_screen_text' => $onScreenText,
             'overlays' => $overlays,

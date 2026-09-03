@@ -39,9 +39,13 @@ class AppPanelProvider extends PanelProvider
             ->id('app')
             ->path('app')
             ->login()
+            // PostTimer kimliği: teal vurgu + amber ikincil; tipografi ve
+            // neo-brutalist dokunuşlar resources/css/filament/app/theme.css'te.
             ->colors([
-                'primary' => Color::Indigo,
+                'primary' => Color::Teal,
+                'gray' => Color::Slate,
             ])
+            ->viteTheme('resources/css/filament/app/theme.css')
             ->tenant(Team::class, slugAttribute: 'slug')
             ->tenantMenu(true)
             ->navigationGroups([
@@ -78,28 +82,6 @@ class AppPanelProvider extends PanelProvider
                     <script type="module" src="'.e(Vite::asset('resources/js/video-thumbnail.js')).'"></script>
                     <script type="module" src="'.e(Vite::asset('resources/js/video-dub.js')).'"></script>
                 ',
-            )
-            ->renderHook(
-                PanelsRenderHook::STYLES_AFTER,
-                fn (): string => '<style>
-                    .fi-ta-content-grid {
-                        display: flex !important;
-                        flex-wrap: nowrap !important;
-                        overflow-x: auto;
-                        scroll-snap-type: x mandatory;
-                        gap: 1rem;
-                        padding: 0 0 1rem 0;
-                        --cols-default: auto !important;
-                        --cols-md: auto !important;
-                        --cols-lg: auto !important;
-                        --cols-xl: auto !important;
-                    }
-                    .fi-ta-content-grid > [role="listitem"] {
-                        flex: 0 0 220px !important;
-                        scroll-snap-align: start;
-                        scroll-snap-stop: always;
-                    }
-                </style>'
             );
     }
 }

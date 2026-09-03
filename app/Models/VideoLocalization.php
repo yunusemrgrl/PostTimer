@@ -170,6 +170,23 @@ class VideoLocalization extends Model
     }
 
     /**
+     * Gemini "bu video zaten hedef dilde (gömülü altyazı/konuşma)" diye
+     * akıllı atlama yaptı mı?
+     */
+    public function isSkipped(): bool
+    {
+        return $this->status === LocalizationStatus::Skipped;
+    }
+
+    /**
+     * Akıllı atlama gerekçesi (Gemini detection.reason), yoksa null.
+     */
+    public function detectionReason(): ?string
+    {
+        return $this->translation['detection_reason'] ?? null;
+    }
+
+    /**
      * TTS üretildi mi?
      */
     public function hasAudio(): bool
