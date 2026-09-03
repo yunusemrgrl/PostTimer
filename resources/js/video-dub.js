@@ -7,7 +7,7 @@ function getActiveSubtitle(segments, currentTime) {
     return null;
 }
 
-function drawSubtitleToCanvas(ctx, text, videoWidth, videoHeight) {
+function drawSubtitleToCanvas(ctx, text, videoWidth, videoHeight, lineCache) {
     if (!text || !text.trim()) return;
     const fontSize = Math.round(videoHeight * 0.045);
     const hPadding = Math.round(videoWidth * 0.08);
@@ -17,7 +17,19 @@ function drawSubtitleToCanvas(ctx, text, videoWidth, videoHeight) {
     ctx.font = `bold ${fontSize}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    const lines = wrapLines(ctx, text, maxWidth);
+    // Aynı segment ekranda kaldığı sürece (genelde birkaç saniye = onlarca
+    // kare) metin ve satır bölme aynı sonucu verir — gerçek zamanlı döngüde
+    // her karede yeniden ölçmek yerine önbellekten okuyoruz.
+    let lines;
+    if (lineCache) {
+        lines = lineCache.get(text);
+        if (!lines) {
+            lines = wrapLines(ctx, text, maxWidth);
+            lineCache.set(text, lines);
+        }
+    } else {
+        lines = wrapLines(ctx, text, maxWidth);
+    }
     const centerX = videoWidth / 2;
     const baseY = videoHeight - bottomMargin;
     for (let i = lines.length - 1; i >= 0; i--) {
@@ -31,55 +43,72 @@ function drawSubtitleToCanvas(ctx, text, videoWidth, videoHeight) {
     }
 }
 
-function drawOverlaysToCanvas(ctx, overlays, seconds, videoWidth, videoHeight) {
-    for (const overlay of overlays || []) {
-        const start = overlay.start ?? 0;
-        const end = overlay.end ?? null;
-        if (seconds < start || (end !== null && seconds > end)) continue;
-        const b = overlay.bbox || {};
-        const padX = videoWidth * 0.015;
-        const padY = videoHeight * 0.01;
-        const x = Math.max(0, (b.left / 100) * videoWidth - padX);
-        const y = Math.max(0, (b.top / 100) * videoHeight - padY);
-        const boxW = Math.min(videoWidth - x, ((b.width / 100) * videoWidth) + padX * 2);
-        const boxH = Math.min(videoHeight - y, ((b.height / 100) * videoHeight) + padY * 2);
-        if (boxW < videoWidth * 0.05 || boxH < videoHeight * 0.015) continue;
-        const radius = Math.min(boxH * 0.2, 16);
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(x, y, boxW, boxH, radius);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.97)';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
-        ctx.shadowBlur = Math.round(videoHeight * 0.006);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        const innerW = boxW * 0.88;
-        const innerH = boxH * 0.8;
-        let fontSize = Math.min(innerH * 0.55, videoHeight * 0.045);
-        let lineHeight = fontSize * 1.3;
+function computeOverlayLayout(ctx, overlay, videoWidth, videoHeight) {
+    const start = overlay.start ?? 0;
+    const end = overlay.end ?? null;
+    const b = overlay.bbox || {};
+    const padX = videoWidth * 0.015;
+    const padY = videoHeight * 0.01;
+    const x = Math.max(0, (b.left / 100) * videoWidth - padX);
+    const y = Math.max(0, (b.top / 100) * videoHeight - padY);
+    const boxW = Math.min(videoWidth - x, ((b.width / 100) * videoWidth) + padX * 2);
+    const boxH = Math.min(videoHeight - y, ((b.height / 100) * videoHeight) + padY * 2);
+    if (boxW < videoWidth * 0.05 || boxH < videoHeight * 0.015) return null;
+    const radius = Math.min(boxH * 0.2, 16);
+    const innerW = boxW * 0.88;
+    const innerH = boxH * 0.8;
+    let fontSize = Math.min(innerH * 0.55, videoHeight * 0.045);
+    let lineHeight = fontSize * 1.3;
+    ctx.font = `bold ${Math.round(fontSize)}px sans-serif`;
+    let lines = wrapLines(ctx, overlay.translation, innerW);
+    while (lines.length * lineHeight > innerH && fontSize > videoHeight * 0.012) {
+        fontSize -= Math.max(1, Math.round(fontSize * 0.06));
         ctx.font = `bold ${Math.round(fontSize)}px sans-serif`;
-        let lines = wrapLines(ctx, overlay.translation, innerW);
-        while (lines.length * lineHeight > innerH && fontSize > videoHeight * 0.012) {
-            fontSize -= Math.max(1, Math.round(fontSize * 0.06));
-            ctx.font = `bold ${Math.round(fontSize)}px sans-serif`;
-            lines = wrapLines(ctx, overlay.translation, innerW);
-            lineHeight = fontSize * 1.3;
-        }
-        ctx.fillStyle = 'rgba(17, 17, 17, 1)';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        const centerX = x + boxW / 2;
-        const totalHeight = lines.length * lineHeight;
-        let lineY = y + (boxH - totalHeight) / 2 + lineHeight / 2;
-        for (const line of lines) {
-            ctx.fillText(line, centerX, lineY);
-            lineY += lineHeight;
-        }
-        ctx.restore();
+        lines = wrapLines(ctx, overlay.translation, innerW);
+        lineHeight = fontSize * 1.3;
     }
+    fontSize = Math.round(fontSize);
+    const centerX = x + boxW / 2;
+    const totalHeight = lines.length * lineHeight;
+    const firstLineY = y + (boxH - totalHeight) / 2 + lineHeight / 2;
+    return {
+        start, end, x, y, boxW, boxH, radius,
+        font: `bold ${fontSize}px sans-serif`,
+        lines, lineHeight, centerX, firstLineY,
+        shadowBlur: Math.round(videoHeight * 0.006),
+    };
+}
+
+// GERÇEK ZAMANLI DÖNGÜDE ÇAĞRILIR — burada artık ctx.measureText YOK.
+// Tüm layout hesabı (font boyutu arama, satır bölme) computeOverlayLayout'ta
+// bir kere yapıldı; burada sadece hazır değerlerle çiziyoruz. Önceki halde bu
+// çizim, her karede measureText'i tekrar tekrar çağırıyordu — ana thread'i
+// yavaşlatıp gerçek-zamanlı kayıtta donmalara (stutter) ve toplam sürenin
+// video içeriğinden uzun çıkmasına (15sn → 22sn) yol açan asıl sebep buydu.
+function drawPrecomputedOverlay(ctx, layout, seconds) {
+    if (seconds < layout.start || (layout.end !== null && seconds > layout.end)) return;
+    const { x, y, boxW, boxH, radius, font, lines, lineHeight, centerX, firstLineY, shadowBlur } = layout;
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(x, y, boxW, boxH, radius);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.97)';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+    ctx.shadowBlur = shadowBlur;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(17, 17, 17, 1)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = font;
+    let lineY = firstLineY;
+    for (const line of lines) {
+        ctx.fillText(line, centerX, lineY);
+        lineY += lineHeight;
+    }
+    ctx.restore();
 }
 
 function wrapLines(ctx, text, maxWidth) {
@@ -288,8 +317,29 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
             }
 
             // 4) MediaRecorder — canvas stream + audio stream birleştir
-            const fps = Math.min(30, Math.round(video.getFrameRate?.() || 30));
-            const canvasStream = canvas.captureStream(fps);
+            //
+            // KÖK NEDEN (2.12s webm sorunu): captureStream(fps) sabit hızlı bir
+            // dahili zamanlayıcıyla çalışır ve drawFrame() döngümüzden TAMAMEN
+            // bağımsızdır. rVFC/rAF geride kaldığında (ör. sekme arka plana
+            // alındığında tarayıcı bu callback'leri throttle/pause eder) bu
+            // zamanlayıcı yine de tıklamaya devam eder ve canvas'ta hiç
+            // güncellenmemiş kareleri kayda gönderir. Bu da gerçek 15sn'lik
+            // oynatmanın kayıtta birkaç saniyeye düşmesine yol açıyordu.
+            //
+            // ÇÖZÜM: captureStream(0) → "manuel mod". Track SADECE biz açıkça
+            // track.requestFrame() çağırdığımızda yeni kare üretir. drawFrame()
+            // içinde gerçekten yeni bir video karesi çizildiğinde requestFrame()
+            // çağırarak kayıt ile çizim arasında 1:1 senkron sağlıyoruz.
+            let canvasStream = canvas.captureStream(0);
+            let canvasVideoTrack = canvasStream.getVideoTracks()[0] || null;
+            const manualCapture = !!(canvasVideoTrack && typeof canvasVideoTrack.requestFrame === 'function');
+            if (!manualCapture) {
+                // requestFrame() desteklenmiyorsa (eski/bazı tarayıcılar) sabit
+                // fps'e düş — en azından çalışır durumda kalsın.
+                const fps = Math.min(30, Math.round(video.getFrameRate?.() || 30));
+                canvasStream = canvas.captureStream(fps);
+                canvasVideoTrack = null;
+            }
             const audioTracks = destination.stream.getAudioTracks();
             const combinedStream = new MediaStream([
                 ...canvasStream.getVideoTracks(),
@@ -314,29 +364,69 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
                 if (e.data && e.data.size > 0) chunks.push(e.data);
             };
 
+            // KÖK NEDEN (85%'te takılma): recorder.onstop bazı durumlarda
+            // (özellikle sekme arka plana alınıp video oynatması takıldığında,
+            // dolayısıyla 'ended' event'i hiç gelmediğinde) tetiklenmiyor.
+            // Bu yüzden tek başına onstop'a güvenmiyoruz: stop() çağrıldıktan
+            // sonra bir süre onstop gelmezse elimizdeki chunk'lardan zorla blob
+            // oluşturup devam ediyoruz (bkz. finishAndStop / ONSTOP_TIMEOUT_MS).
+            let recordingSettled = false;
+            let resolveRecording, rejectRecording;
             const recordingDone = new Promise((resolve, reject) => {
-                recorder.onstop = () => {
-                    try {
-                        const blob = new Blob(chunks, { type: 'video/webm' });
-                        resolve(blob);
-                    } catch (err) {
-                        reject(err);
-                    }
-                };
-                recorder.onerror = (e) => reject(e.error || new Error('Recorder hatası'));
+                resolveRecording = resolve;
+                rejectRecording = reject;
             });
+            const finishRecording = (result, isError) => {
+                if (recordingSettled) return;
+                recordingSettled = true;
+                if (isError) rejectRecording(result);
+                else resolveRecording(result);
+            };
+            recorder.onstop = () => {
+                try {
+                    finishRecording(new Blob(chunks, { type: 'video/webm' }), false);
+                } catch (err) {
+                    finishRecording(err, true);
+                }
+            };
+            recorder.onerror = (e) => finishRecording(e.error || new Error('Recorder hatası'), true);
+
+            // Overlay layout'larını (konum, font boyutu, satır bölme) BİR KERE
+            // hesaplıyoruz — bunlar overlay ekranda kaldığı sürece değişmez.
+            // Gerçek zamanlı çizim döngüsünde bunu tekrar tekrar yapmak, ana
+            // thread'i yavaşlatıp kayıtta donmalara (stutter) ve toplam sürenin
+            // video içeriğinden uzun çıkmasına yol açan asıl nedendi.
+            const overlayLayouts = hasOverlays
+                ? this.overlays.map((o) => computeOverlayLayout(ctx, o, width, height)).filter(Boolean)
+                : [];
+            const subtitleLineCache = new Map();
 
             // 5) Frame çizme döngüsü
+            let lastCurrentTime = -1;
+            let lastAdvanceAt = performance.now();
             const drawFrame = () => {
                 try {
+                    // readyState < 2 (HAVE_CURRENT_DATA): video'nun o an
+                    // gösterilecek gerçek bir karesi yok. Bu durumda hem eski
+                    // kareyi tekrar canvas'a basmıyoruz hem de (manuel modda)
+                    // kayda boş/donuk bir kare göndermiyoruz.
+                    if (video.readyState < 2) return;
                     ctx.drawImage(video, 0, 0, width, height);
-                    drawOverlaysToCanvas(ctx, this.overlays, video.currentTime, width, height);
+                    for (const layout of overlayLayouts) drawPrecomputedOverlay(ctx, layout, video.currentTime);
                     if (burn && hasSegments) {
                         const subtitle = getActiveSubtitle(this.segments, video.currentTime);
-                        if (subtitle) drawSubtitleToCanvas(ctx, subtitle, width, height);
+                        if (subtitle) drawSubtitleToCanvas(ctx, subtitle, width, height, subtitleLineCache);
                     }
+                    // Manuel modda: sadece gerçekten yeni bir kare çizildiğinde
+                    // kayda gönder — kayıttaki her kare, canvas'a çizilen gerçek
+                    // bir video karesine 1:1 karşılık gelir.
+                    if (canvasVideoTrack) canvasVideoTrack.requestFrame();
                     if (duration > 0) {
                         this.progress = Math.min(95, 5 + Math.round((video.currentTime / duration) * 90));
+                    }
+                    if (video.currentTime > lastCurrentTime) {
+                        lastCurrentTime = video.currentTime;
+                        lastAdvanceAt = performance.now();
                     }
                 } catch (e) {
                     console.warn('drawFrame hatası:', e);
@@ -370,15 +460,56 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
             };
 
             // Video bitince recorder'ı durdur
-            const onEnded = () => {
+            const STOP_GRACE_MS = 150;
+            const ONSTOP_TIMEOUT_MS = 8000; // onstop bu süre içinde gelmezse elimizdekiyle devam et
+            const finishAndStop = () => {
+                if (stopped) return;
+                stopped = true; // çizim döngüsünü hemen durdur
                 drawFrame(); // son frame
                 setTimeout(() => {
                     if (recorder && recorder.state !== 'inactive') {
-                        recorder.stop();
+                        try { recorder.requestData(); } catch (e) {}
+                        try { recorder.stop(); } catch (e) {}
+                        setTimeout(() => {
+                            // onstop hâlâ gelmediyse elimizdeki chunk'larla devam et
+                            if (chunks.length > 0) {
+                                finishRecording(new Blob(chunks, { type: 'video/webm' }), false);
+                            } else {
+                                finishRecording(new Error('Kayıt tamamlanamadı (veri alınamadı). Sekmeyi ön planda tutup tekrar deneyin.'), true);
+                            }
+                        }, ONSTOP_TIMEOUT_MS);
+                    } else if (chunks.length > 0) {
+                        finishRecording(new Blob(chunks, { type: 'video/webm' }), false);
                     }
-                }, 150);
+                }, STOP_GRACE_MS);
             };
-            video.addEventListener('ended', onEnded, { once: true });
+            video.addEventListener('ended', finishAndStop, { once: true });
+
+            // KÖK NEDEN (85%'te takılma) — oynatma takılması izleyicisi:
+            // Sekme arka plana alındığında rVFC/rAF throttle/pause edilebilir,
+            // video decode durabilir ve bu durumda 'ended' event'i HİÇ gelmez
+            // — işlem süresiz beklemede kalırdı. setInterval, rAF'in aksine
+            // arka planda da (en fazla ~1sn'ye kadar throttle ile) çalışmaya
+            // devam ettiği için buradaki takılmayı güvenilir şekilde yakalar.
+            const STALL_TIMEOUT_MS = 5000;
+            const stallInterval = setInterval(() => {
+                if (stopped) return;
+                if (performance.now() - lastAdvanceAt > STALL_TIMEOUT_MS) {
+                    console.warn('Video oynatma takıldı (muhtemelen sekme arka planda) — kayıt eldeki veriyle sonlandırılıyor.');
+                    this.status = 'Uyarı: Oynatma yavaşladı, kayıt eldeki veriyle tamamlanıyor…';
+                    finishAndStop();
+                }
+            }, 1000);
+
+            // Kullanıcı sekmeyi arka plana alırsa bilgilendir — tarayıcılar
+            // arka plan sekmelerinde rVFC/rAF'i throttle eder, bu da kaydın
+            // yavaşlamasına/kısalmasına yol açabilir.
+            const onVisibilityChange = () => {
+                if (document.hidden && !stopped) {
+                    console.warn('Sekme arka plana alındı — kayıt yavaşlayabilir. İşlem bitene kadar sekmeyi ön planda tutmanız önerilir.');
+                }
+            };
+            document.addEventListener('visibilitychange', onVisibilityChange);
 
             // Cleanup listesi
             this._cleanupFns.push(() => {
@@ -387,6 +518,8 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
                 if (rvfcId && typeof video.cancelVideoFrameCallback === 'function') {
                     try { video.cancelVideoFrameCallback(rvfcId); } catch (e) {}
                 }
+                clearInterval(stallInterval);
+                document.removeEventListener('visibilitychange', onVisibilityChange);
                 canvasStream.getTracks().forEach((t) => t.stop());
             });
 
@@ -395,7 +528,7 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
                 ? 'Video yazıyla yeniden kodlanıyor…'
                 : (dubAudio ? 'Video + ses birleştiriliyor…' : 'Video kopyalanıyor…');
 
-            recorder.start(1000); // her saniye chunk al (bellek şişmesin)
+            recorder.start(1000); // her 1sn'de ondataavailable tetiklenir, chunk'lar aşamalı birikir
 
             // Dublajı video başlangıcında başlat
             if (dubBufferSource) {
