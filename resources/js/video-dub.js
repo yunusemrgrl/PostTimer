@@ -158,9 +158,38 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
             this.previewUrl = null;
         }
 
-        // Ön kontrol: MediaRecorder gerekli
+                // Ön kontrol: MediaRecorder gerekli
         if (typeof MediaRecorder === 'undefined') {
             this.status = 'Hata: Tarayıcınız MediaRecorder desteklemiyor. Chrome/Edge/Firefox kullanın.';
+            this.busy = false;
+            return;
+        }
+
+        // Video URL'ini CORS problemlerinden kurtarmak için önce same-origin
+        // blob URL'e çeviriyoruz. CDN'den gelen cross-origin videolar
+        // mediabunny/HTMLCanvasElement gibi yerlerde çalışmıyor.
+        this.status = 'Video hazırlanıyor…';
+        try {
+            const videoResponse = await fetch(this.videoUrl, {method: 'GET'});
+            if (!videoResponse.ok) {
+                throw new Error(
+                    'Video indirilemedi (HTTP ' + videoResponse.status + '): ' + this.videoUrl,
+                );
+            }
+            const videoBlob = await videoResponse.blob();
+            if (videoBlob.size === 0) {
+                throw new Error('Video bozuk (0 byte). Lütfen daha sonra tekrar deneyin.');
+            }
+            if (this._videoProxyUrl) URL.revokeObjectURL(this._videoProxyUrl);
+            this._videoProxyUrl = URL.createObjectURL(videoBlob);
+            this._cleanupFns.push(() => {
+                if (this._videoProxyUrl) {
+                    URL.revokeObjectURL(this._videoProxyUrl);
+                    this._videoProxyUrl = null;
+                }
+            });
+        } catch (err) {
+            this.status = 'Hata: ' + (err.message || 'Video yüklenemedi.');
             this.busy = false;
             return;
         }
@@ -184,7 +213,7 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
             // Sesin AudioContext'e gidebilmesi için playsInline + muted=false
             // ama kullanıcıya duyurmamak için volume 0 yapacağız
             video.volume = 0;
-            video.src = this.videoUrl;
+                video.src = this._videoProxyUrl || this.videoUrl;
 
             await new Promise((resolve, reject) => {
                 const onReady = () => {
