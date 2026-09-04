@@ -29,8 +29,15 @@ npm run smoke:dub
 npm run smoke:dub:inspect
 ```
 
-Varsayılan hedef `http://127.0.0.1:8000`. Farklı ortam:
-`node scripts/dub-button-smoke.mjs --base=http://multitenant-app.test --path=/app/demo-hesap/contents`
+Varsayılan hedef `https://multitenant-app.test` (Herd + `herd secure`). Farklı ortam:
+`node scripts/dub-button-smoke.mjs --base=http://127.0.0.1:8000`
+
+> **R2 CDN notu:** Gerçek CDN videosu (media.posttimer...) yalnızca
+> `http://multitenant-app.test` origin'ine CORS izni veriyor; `https://`
+> origin'i henüz eklenmediyse fetch "Failed to fetch" verir. https üzerinden
+> tam uçtan uca test için Cloudflare R2 CORS kuralına `https://multitenant-app.test`
+> eklenmeli (bkz. .ai/rules/app.md). Eklenene kadar aynı-origin test videosu veya
+> localhost kullanın.
 
 Kimlik bilgileri: `PW_SMOKE_EMAIL` / `PW_SMOKE_PASSWORD` env'leri veya
 `--email=` / `--password=` argümanları (seeder ile eşleşmeli).

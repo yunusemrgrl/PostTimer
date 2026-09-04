@@ -16,7 +16,7 @@ const full = args.includes('--full');
 const headed = args.includes('--headed');
 const BASE = args.find((a) => a.startsWith('--base='))?.split('=')[1]
     || process.env.PW_SMOKE_BASE
-    || 'http://127.0.0.1:8000';
+    || 'https://multitenant-app.test';
 const PATH = args.find((a) => a.startsWith('--path='))?.split('=')[1] || null;
 const PICK_TENANT = args.find((a) => a.startsWith('--pick-tenant='))?.split('=')[1] || null;
 // Kimlik bilgileri: seeder (PlaywrightSmokeUserSeeder) ile eşleşmeli.
