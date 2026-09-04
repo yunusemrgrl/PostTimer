@@ -14,10 +14,17 @@ const args = process.argv.slice(2);
 const channel = args.find((a) => a.startsWith('--channel='))?.split('=')[1] || null;
 const full = args.includes('--full');
 const headed = args.includes('--headed');
-const BASE = args.find((a) => a.startsWith('--base='))?.split('=')[1] || 'http://multitenant-app.test';
+const BASE = args.find((a) => a.startsWith('--base='))?.split('=')[1]
+    || process.env.PW_SMOKE_BASE
+    || 'http://127.0.0.1:8000';
 const PATH = args.find((a) => a.startsWith('--path='))?.split('=')[1] || null;
-const EMAIL = 'pw-smoke@example.com';
-const PASSWORD = 'password';
+// Kimlik bilgileri: seeder (PlaywrightSmokeUserSeeder) ile eşleşmeli.
+const EMAIL = args.find((a) => a.startsWith('--email='))?.split('=')[1]
+    || process.env.PW_SMOKE_EMAIL
+    || 'pw-smoke@example.com';
+const PASSWORD = args.find((a) => a.startsWith('--password='))?.split('=')[1]
+    || process.env.PW_SMOKE_PASSWORD
+    || 'password';
 
 const consoleLines = [];
 const pageErrors = [];

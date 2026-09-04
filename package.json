@@ -4,7 +4,9 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "smoke:dub": "node scripts/dub-button-smoke.mjs --channel=msedge --headed --full",
+        "smoke:dub:inspect": "node scripts/inspect-output.mjs"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
