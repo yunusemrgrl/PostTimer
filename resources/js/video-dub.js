@@ -302,6 +302,7 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
     encodeFps: null,
     previewUrl: null,
     showPreview: false,
+    showDubbed: false,
     _cleanupFns: [],
 
     async combine(mode = 'download') {
@@ -310,6 +311,7 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
         this.progress = 0;
         this.encodeFps = null;
         this.status = 'Hazırlanıyor…';
+        this.showDubbed = true; // üretim akışı başlarken "Dublajlı Sonuç" sekmesine geç
         this._cleanupFns = [];
 
         if (this.previewUrl) {

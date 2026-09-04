@@ -18,6 +18,7 @@ const BASE = args.find((a) => a.startsWith('--base='))?.split('=')[1]
     || process.env.PW_SMOKE_BASE
     || 'http://127.0.0.1:8000';
 const PATH = args.find((a) => a.startsWith('--path='))?.split('=')[1] || null;
+const PICK_TENANT = args.find((a) => a.startsWith('--pick-tenant='))?.split('=')[1] || null;
 // Kimlik bilgileri: seeder (PlaywrightSmokeUserSeeder) ile eşleşmeli.
 const EMAIL = args.find((a) => a.startsWith('--email='))?.split('=')[1]
     || process.env.PW_SMOKE_EMAIL
@@ -52,7 +53,7 @@ await page.goto(`${BASE}/app/login`, { waitUntil: 'networkidle' });
 await page.fill('input[type="email"]', EMAIL);
 await page.fill('input[type="password"]', PASSWORD);
 await page.click('button[type="submit"]');
-await page.waitForLoadState('networkidle');
+await page.waitForTimeout(2500); // login + tenant redirect'i settle ettir
 console.log(`LOGIN OK → ${page.url()}`);
 
 // 2) video-dub script'i yüklendi mi?
@@ -67,14 +68,23 @@ const ctx = await page.evaluate(() => ({
 }));
 console.log(`secure context: ${JSON.stringify(ctx)}`);
 
-// 3) İçerikler sayfasına git: --path verilmişse direkt, yoksa nav linkiyle
+// 3) İçerikler sayfasına git: --path verilmişse direkt denenir, yoksa nav linki
 if (PATH) {
     await page.goto(`${BASE}${PATH}`, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle').catch(() => {});
     await page.waitForTimeout(1500);
-} else {
-    await page.getByRole('link', { name: 'İçerikler' }).first().click();
-    await page.waitForLoadState('networkidle');
+}
+// Tenant aktifse sidebar'da "İçerikler" linki vardır; PATH hedefine ulaşamadık
+// (örn. login redir) ya da PATH verilmediyse nav linki kullan.
+if (!page.url().includes('/contents')) {
+    const nav = page.getByRole('link', { name: 'İçerikler' }).first();
+    await nav.click().catch(async () => {
+        // nav yoksa (panel boş) direkt tenant + contents dene
+        await page.goto(`${BASE}/app/contents`, { waitUntil: 'domcontentloaded' }).catch(() => {});
+        await page.waitForTimeout(1200);
+    });
+    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForTimeout(1200);
 }
 console.log(`CONTENTS → ${page.url()}`);
 

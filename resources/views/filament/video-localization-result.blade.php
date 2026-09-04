@@ -259,7 +259,17 @@
                 {{-- Önce/Sonra video karşılaştırma. showDubbed dış scope'ta,
                      dublaj önizlemesi iç dubCombiner scope'unda üretilir
                      (iç scope dış değişkeni okur). --}}
-                <div x-data="{ showDubbed: false }" class="mt-3 space-y-2">
+                <div
+                    x-data="dubCombiner(
+                        @js($localization->content->media_url),
+                        @js($localization->hasAudio() && $localization->audioMedia !== null ? $localization->audioMedia->url : null),
+                        @js('dublaj-'.$localization->content_id),
+                        @js($segments),
+                        false,
+                        @js($overlays)
+                    )"
+                    class="mt-3 space-y-2"
+                >
                     <div class="flex items-center gap-2">
                         <button
                             type="button"
@@ -283,17 +293,7 @@
                     ></video>
 
                     {{-- Dublaj üretme + önizleme + progress bar --}}
-                    <div
-                        x-data="dubCombiner(
-                            @js($localization->content->media_url),
-                            @js($localization->hasAudio() && $localization->audioMedia !== null ? $localization->audioMedia->url : null),
-                            @js('dublaj-'.$localization->content_id),
-                            @js($segments),
-                            false,
-                            @js($overlays)
-                        )"
-                        class="space-y-2"
-                    >
+                    <div class="space-y-2">
                         <div x-show="showDubbed" class="space-y-2">
                             {{-- Her yeni blob için <video> elementini sıfırdan kur (x-if remount).
                                  Aynı element üzerinde :src değiştirilirse Chromium gizli iken
