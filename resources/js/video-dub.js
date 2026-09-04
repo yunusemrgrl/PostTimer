@@ -62,17 +62,19 @@ function computeOverlayLayout(ctx, overlay, videoWidth, videoHeight) {
     const start = overlay.start ?? 0;
     const end = overlay.end ?? null;
     const b = overlay.bbox || {};
-    const padX = videoWidth * 0.015;
-    const padY = videoHeight * 0.01;
+    // İngilizce bbox baz alınır; Türkçe genellikle %20-30 daha uzun olur.
+    // Orijinal metnin tamamen örtülmesi için padding ve genişlik toleranslı.
+    const padX = videoWidth * 0.04;
+    const padY = videoHeight * 0.025;
     const x = Math.max(0, (b.left / 100) * videoWidth - padX);
     const y = Math.max(0, (b.top / 100) * videoHeight - padY);
-    const boxW = Math.min(videoWidth - x, ((b.width / 100) * videoWidth) + padX * 2);
-    const boxH = Math.min(videoHeight - y, ((b.height / 100) * videoHeight) + padY * 2);
+    const boxW = Math.min(videoWidth - x, ((b.width / 100) * videoWidth) + padX * 2.5);
+    const boxH = Math.min(videoHeight - y, ((b.height / 100) * videoHeight) + padY * 2.5);
     if (boxW < videoWidth * 0.05 || boxH < videoHeight * 0.015) return null;
     const radius = Math.min(boxH * 0.2, 16);
-    const innerW = boxW * 0.88;
-    const innerH = boxH * 0.8;
-    let fontSize = Math.min(innerH * 0.55, videoHeight * 0.045);
+    const innerW = boxW * 0.9;
+    const innerH = boxH * 0.82;
+    let fontSize = Math.min(innerH * 0.5, videoHeight * 0.04);
     let lineHeight = fontSize * 1.3;
     ctx.font = `bold ${Math.round(fontSize)}px sans-serif`;
     let lines = wrapLines(ctx, overlay.translation, innerW);
@@ -106,13 +108,14 @@ function drawPrecomputedOverlay(ctx, layout, seconds) {
     ctx.save();
     ctx.beginPath();
     ctx.roundRect(x, y, boxW, boxH, radius);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.97)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 1)';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
     ctx.shadowBlur = shadowBlur;
     ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
     ctx.stroke();
     ctx.fillStyle = 'rgba(17, 17, 17, 1)';
     ctx.textAlign = 'center';
