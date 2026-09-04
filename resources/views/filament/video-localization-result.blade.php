@@ -346,6 +346,8 @@
                             <p class="text-xs text-gray-500">
                                 <span x-text="status"></span>
                                 <span x-show="progress > 0">(<span x-text="progress"></span>%)</span>
+                                {{-- Encode hızı: "yavaş ama akıcı" ile "takıldı" ayrımı için --}}
+                                <span x-show="encodeFps" class="tabular-nums">· <span x-text="encodeFps"></span> fps</span>
                             </p>
                         </div>
                     </div>

@@ -1,3 +1,18 @@
+import {
+    ALL_FORMATS,
+    AudioBufferSink,
+    AudioBufferSource,
+    BlobSource,
+    BufferTarget,
+    CanvasSource,
+    Input,
+    Mp4OutputFormat,
+    Output,
+    Quality,
+    canEncodeAudio,
+    canEncodeVideo,
+} from 'mediabunny';
+
 function getActiveSubtitle(segments, currentTime) {
     for (const seg of segments) {
         if (currentTime >= (seg.start ?? 0) && currentTime <= (seg.end ?? 0)) {
@@ -128,6 +143,96 @@ function wrapLines(ctx, text, maxWidth) {
     return lines;
 }
 
+// ---------------------------------------------------------------------------
+// Encode desteği + offline ses pipeline'ı yardımcıları
+// ---------------------------------------------------------------------------
+
+// H.264 (avc) video + AAC ses ENCODE desteği yoksa net hata ver. Opus fallback
+// bilinçli olarak YOK: Instagram/iOS AAC ister, opus'lu MP4 hedef
+// platformlarda oynamaz (bkz. dubCombiner başındaki not).
+async function assertEncoderSupport(width, height) {
+    let videoOk = false;
+    let audioOk = false;
+    try {
+        videoOk = await canEncodeVideo('avc', { width, height });
+        audioOk = await canEncodeAudio('aac', { numberOfChannels: 2, sampleRate: 44100 });
+    } catch (e) {
+        console.warn('Codec destek sorgusu başarısız:', e);
+    }
+    if (!videoOk || !audioOk) {
+        throw new Error(
+            'Tarayıcınız ' + (!videoOk ? 'H.264 video' : 'AAC ses') +
+            ' kodlamasını desteklemiyor. MP4 çıktısı için Chrome/Edge/Safari kullanın.',
+        );
+    }
+}
+
+// decodeAudioData için izole bir OfflineAudioContext: render'a gerek kalmadan
+// decode yapar, autoplay policy'sine takılmaz, kullanıcıya ses duyurmaz.
+// Desteklenmeyen/bozuk ses için null döner.
+async function decodeAudioBuffer(arrayBuffer) {
+    try {
+        const ctx = new OfflineAudioContext(1, 1, 44100);
+        return await ctx.decodeAudioData(arrayBuffer);
+    } catch (e) {
+        return null;
+    }
+}
+
+// Orijinal ses decode: önce native demuxer (decodeAudioData video
+// konteynerinden ses track'ini çıkarır — MP4/AAC ve WebM/Opus'ta çalışır),
+// konteyneri çözemezse Mediabunny AudioBufferSink (WebCodecs AudioDecoder).
+// İkisi de başarısızsa [] döner — sessiz devam (videoda ses olmayabilir; bu
+// bir hata değildir).
+// Dönüş: [{ buffer: AudioBuffer, timestamp: number }] — mixAudioOffline bunu
+// tek formatta tüketir.
+async function decodeOriginalAudio(videoBlob) {
+    const bytes = await videoBlob.arrayBuffer();
+    const native = await decodeAudioBuffer(bytes.slice(0));
+    if (native) return [{ buffer: native, timestamp: 0 }];
+
+    try {
+        const input = new Input({ source: new BlobSource(videoBlob), formats: ALL_FORMATS });
+        const track = await input.getPrimaryAudioTrack();
+        if (!track || !(await track.canDecode())) return [];
+        const sink = new AudioBufferSink(track);
+        const chunks = [];
+        for await (const { buffer, timestamp } of sink.buffers()) {
+            chunks.push({ buffer, timestamp });
+        }
+        return chunks;
+    } catch (e) {
+        console.warn('AudioBufferSink fallback başarısız:', e);
+        return [];
+    }
+}
+
+// Orijinal + dublajı tek stereo 44.1kHz AudioBuffer'da birleştir:
+// OfflineAudioContext tek render'da resample + pad + mix yapar. Realtime
+// capture olmadığı için arka plan sekmesinden tamamen bağımsızdır ve
+// oynatma hızına bağlı senkron hatası üretmez. Hiç ses kaynağı yoksa null
+// döner (MP4 ses track'siz yazılır).
+async function mixAudioOffline({ original, dub, duration }) {
+    if ((!original || original.length === 0) && !dub) return null;
+    const sampleRate = 44100;
+    const length = Math.max(1, Math.ceil(duration * sampleRate));
+    const ctx = new OfflineAudioContext({ numberOfChannels: 2, length, sampleRate });
+
+    for (const { buffer, timestamp } of original || []) {
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(timestamp);
+    }
+    if (dub) {
+        const source = ctx.createBufferSource();
+        source.buffer = dub;
+        source.connect(ctx.destination);
+        source.start(0);
+    }
+    return ctx.startRendering();
+}
+
 function registerAlpineComponent(name, definition) {
     const register = () => Alpine.data(name, definition);
     if (window.Alpine) {
@@ -138,24 +243,47 @@ function registerAlpineComponent(name, definition) {
 }
 
 /**
- * Dub combiner — Canvas + MediaRecorder yaklaşımı.
+ * Dub combiner — <video> (native decode) + WebCodecs (encode) + Mediabunny (mux).
  *
- * Neden mediabunny/WebCodecs değil?
- * WebCodecs VideoDecoder bazı codec'leri (özellikle headless Chrome ve bazı
- * gerçek tarayıcı konfigürasyonlarında) decode edemez — "undecodable_source_codec"
- * hatası verir. <video> elementi ise tarayıcının native decoder'ını kullanır;
- * video oynatılabiliyorsa decode edilebiliyor demektir.
+ * Decode ve encode bilinçli olarak AYRI katmanlarda:
+ * - Decode: WebCodecs VideoDecoder bazı kaynak codec'leri decode edemez
+ *   ("undecodable_source_codec" — headless Chrome dahil). <video> elementi
+ *   tarayıcının native decoder'ını kullanır; video oynatılabiliyorsa decode
+ *   edilebiliyor demektir. Kaynak video bu yüzden ASLA WebCodecs ile decode
+ *   edilmez (86b21e6'daki Mediabunny Conversion path'i bu yüzden geri alındı).
+ * - Encode: WebCodecs VideoEncoder (H.264) + AudioEncoder (AAC) — ayrı
+ *   thread'lerde çalışır, main thread throttle'ından etkilenmez.
+ * - Mux: Mediabunny Output + Mp4OutputFormat (fastStart: 'in-memory') +
+ *   BufferTarget → çıktı her yerde oynayan MP4 (H.264 + AAC). Instagram/iOS
+ *   AAC ister; AAC desteklenmeyen tarayıcıda opus fallback YOK, net hata ver.
+ *
+ * Ses pipeline'ı TAMAMEN offline (realtime capture yok):
+ *   video blob → decodeAudioData (native demuxer; konteyneri çözemezse
+ *   Mediabunny AudioBufferSink fallback) → OfflineAudioContext'te dublajla
+ *   mix/resample/pad → tek AudioBuffer → AudioBufferSource (AAC 128k).
+ *   Arka plan sekmesinden etkilenmez; createMediaElementSource /
+ *   MediaStreamDestination / realtime senkron hataları sınıfı tamamen kalkar.
+ *
+ * Video frame'leri: <video>.play() → requestVideoFrameCallback → canvas'a çiz
+ * (subtitle/overlay) → CanvasSource.add(mediaTime) → H.264. Timestamp'ler
+ * mediaTime tabanlıdır (saniye, mikro-değil) — VFR kaynaklar doğru mux'lanır,
+ * captureStream'in dahili sabit zamanlayıcısı (2.12s webm sorununun kök
+ * nedeni) devre dışı kalır.
+ *
+ * BİLİNÇLİ SINIR: Video decode hâlâ realtime (oynatma) olduğu için sekme
+ * arka plana alınırsa rVFC/video oynatması durur — kayıt takılır ve
+ * stallInterval eldeki veriyle nazikçe bitirir. Yani bu rewrite ÇIKTI
+ * FORMATINI (WebM → MP4) ve SES pipeline'INI (realtime → offline) çözer;
+ * arka plan sekmesi throttle'ını çözmez. Kalıcı çözüm hybrid decode gerektirir
+ * (önce WebCodecs VideoDecoder dene, düşerse <video>'ya dön) — follow-up.
  *
  * Akış:
- *  1. <video> elementi oluştur, native decoder ile yükle
- *  2. AudioContext ile orijinal ses + dublaj sesini mix'le
- *  3. Her frame'de video'yu canvas'a çiz, overlay/subtitle ekle
- *  4. canvas.captureStream() + audio destination stream → MediaRecorder
- *  5. Video bitince WebM blob olarak indir veya önizle
- *
- * Not: Çıktı WebM olur (MP4 encode AAC+H.264 gerektirir, bu da WebCodecs
- * gerektirir — kısır döngü). Server-side MP4 dönüşümü istenirse ayrıca
- * endpoint eklenebilir.
+ *  1. Video blob'unu indir (CORS-safe same-origin proxy) + <video> metadata
+ *  2. canEncodeVideo('avc') + canEncodeAudio('aac') → destek yoksa fail-fast
+ *  3. Orijinal ses (offline decode) + dublaj → OfflineAudioContext mix
+ *  4. Mediabunny Output (MP4) + CanvasSource (H.264) + AudioBufferSource (AAC)
+ *  5. rVFC döngüsü: canvas'a çiz → CanvasSource.add(mediaTime)
+ *  6. 'ended' → finalize → MP4 blob: indir veya önizle
  */
 registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments = [], burnSubtitles = false, overlays = []) => ({
     videoUrl,
@@ -171,6 +299,7 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
         ? 'Orijinal video + dublaj sesini tarayıcıda birleştirir.'
         : 'Ekran yazılarını Türkçe\'ye çevirir, orijinal sesi korur.',
     progress: 0,
+    encodeFps: null,
     previewUrl: null,
     showPreview: false,
     _cleanupFns: [],
@@ -179,6 +308,7 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
         if (this.busy) return;
         this.busy = true;
         this.progress = 0;
+        this.encodeFps = null;
         this.status = 'Hazırlanıyor…';
         this._cleanupFns = [];
 
@@ -187,9 +317,11 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
             this.previewUrl = null;
         }
 
-                // Ön kontrol: MediaRecorder gerekli
-        if (typeof MediaRecorder === 'undefined') {
-            this.status = 'Hata: Tarayıcınız MediaRecorder desteklemiyor. Chrome/Edge/Firefox kullanın.';
+        // Ön kontrol: WebCodecs ENCODE (H.264 + AAC) gerekli. Decode için
+        // WebCodecs GEREKMEZ — kaynak <video> elementinin native decoder'ından
+        // gelir (bkz. dosya başındaki not).
+        if (typeof VideoEncoder === 'undefined' || typeof AudioEncoder === 'undefined') {
+            this.status = 'Hata: Tarayıcınız WebCodecs desteklemiyor. Chrome/Edge/Safari kullanın.';
             this.busy = false;
             return;
         }
@@ -224,8 +356,9 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
         }
 
         let video = null;
-        let audioCtx = null;
-        let recorder = null;
+        let output = null;
+        let canvasSource = null;
+        let audioSource = null;
 
         try {
             const dubAudio = Boolean(this.audioUrl);
@@ -233,16 +366,15 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
             const hasOverlays = Array.isArray(this.overlays) && this.overlays.length > 0;
             const burn = (this.burnSubtitles && hasSegments) || hasOverlays;
 
-            // 1) Video elementi — muted başlat, sesi AudioContext ile yöneteceğiz
+            // 1) Video elementi — SADECE decode/metadata için; sesini hiçbir
+            // zaman elementten realtime almıyoruz (offline ses pipeline'ı var).
+            // muted: kullanıcıya ses duyurmaz + autoplay policy'lerini geçer.
             video = document.createElement('video');
             video.crossOrigin = 'anonymous';
-            video.muted = false; // AudioContext sesini duymak için muted olmamalı
+            video.muted = true;
             video.playsInline = true;
             video.preload = 'auto';
-            // Sesin AudioContext'e gidebilmesi için playsInline + muted=false
-            // ama kullanıcıya duyurmamak için volume 0 yapacağız
-            video.volume = 0;
-                video.src = this._videoProxyUrl || this.videoUrl;
+            video.src = this._videoProxyUrl || this.videoUrl;
 
             await new Promise((resolve, reject) => {
                 const onReady = () => {
@@ -270,126 +402,84 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
                 throw new Error('Video süresi belirsiz — canlı yayın dosyaları desteklenmez.');
             }
 
-            // 2) Canvas
+            // 2) Encode desteği — gerçek çözünürlükle sorgula. H.264 (avc) +
+            //    AAC yoksa net hata: Instagram/iOS AAC ister, opus fallback
+            //    bilinçli olarak YOK.
+            this.status = 'Tarayıcı codec desteği kontrol ediliyor…';
+            await assertEncoderSupport(width, height);
+
+            // 3) Canvas
             const canvas = document.createElement('canvas');
             canvas.width = width;
             canvas.height = height;
             const ctx = canvas.getContext('2d', { alpha: false });
 
-            // 3) AudioContext — orijinal ses + dublaj mix
-            const AudioCtx = window.AudioContext || window.webkitAudioContext;
-            if (!AudioCtx) throw new Error('AudioContext desteklenmiyor.');
-            audioCtx = new AudioCtx();
-            if (audioCtx.state === 'suspended') await audioCtx.resume();
+            // 4) Ses pipeline'ı — tamamen OFFLINE (realtime capture yok):
+            //    orijinal ses + dublaj → OfflineAudioContext'te mix/resample/pad
+            //    → tek AudioBuffer. Arka plan sekmesinden etkilenmez; ses-video
+            //    senkronu oynatma hızına bağlı değildir.
+            this.status = 'Ses hazırlanıyor…';
+            this.progress = 5;
 
-            const destination = audioCtx.createMediaStreamDestination();
-
-            // Orijinal ses: MediaElementSource ile video elementinden al
-            // Not: createMediaElementSource bir kez çağrılabilir; video elementini
-            // de "hoparlör" yerine destination'a yönlendiriyoruz ki kullanıcıya
-            // gerçek zamanlı duyulmasın (sadece kayda gitsin).
-            let videoSource = null;
+            let originalChunks = [];
             try {
-                videoSource = audioCtx.createMediaElementSource(video);
-                videoSource.connect(destination);
-                // Hoparlöre bağlama — sadece kayda gitsin
+                originalChunks = await decodeOriginalAudio(videoBlob);
             } catch (e) {
-                // Zaten başka context'e bağlıysa — orijinal ses kayba uğrar ama
-                // dublaj varsa problem yok. Yoksa kullanıcıya bilgi ver.
-                console.warn('MediaElementSource oluşturulamadı:', e.message);
-                if (!dubAudio) {
-                    throw new Error('Orijinal ses alınamadı (video başka ses sistemine bağlı).');
-                }
+                console.warn('Orijinal ses decode edilemedi (sessiz devam):', e);
             }
 
-            // Dublaj sesi
-            let dubBufferSource = null;
+            let dubBuffer = null;
             if (dubAudio) {
-                this.status = 'Dublaj sesi hazırlanıyor…';
-                this.progress = 5;
                 const response = await fetch(this.audioUrl, { mode: 'cors' });
                 if (!response.ok) throw new Error('Dublaj sesi indirilemedi: HTTP ' + response.status);
                 const audioData = await response.arrayBuffer();
-                const decoded = await audioCtx.decodeAudioData(audioData);
-                dubBufferSource = audioCtx.createBufferSource();
-                dubBufferSource.buffer = decoded;
-                dubBufferSource.connect(destination);
-            }
-
-            // 4) MediaRecorder — canvas stream + audio stream birleştir
-            //
-            // KÖK NEDEN (2.12s webm sorunu): captureStream(fps) sabit hızlı bir
-            // dahili zamanlayıcıyla çalışır ve drawFrame() döngümüzden TAMAMEN
-            // bağımsızdır. rVFC/rAF geride kaldığında (ör. sekme arka plana
-            // alındığında tarayıcı bu callback'leri throttle/pause eder) bu
-            // zamanlayıcı yine de tıklamaya devam eder ve canvas'ta hiç
-            // güncellenmemiş kareleri kayda gönderir. Bu da gerçek 15sn'lik
-            // oynatmanın kayıtta birkaç saniyeye düşmesine yol açıyordu.
-            //
-            // ÇÖZÜM: captureStream(0) → "manuel mod". Track SADECE biz açıkça
-            // track.requestFrame() çağırdığımızda yeni kare üretir. drawFrame()
-            // içinde gerçekten yeni bir video karesi çizildiğinde requestFrame()
-            // çağırarak kayıt ile çizim arasında 1:1 senkron sağlıyoruz.
-            let canvasStream = canvas.captureStream(0);
-            let canvasVideoTrack = canvasStream.getVideoTracks()[0] || null;
-            const manualCapture = !!(canvasVideoTrack && typeof canvasVideoTrack.requestFrame === 'function');
-            if (!manualCapture) {
-                // requestFrame() desteklenmiyorsa (eski/bazı tarayıcılar) sabit
-                // fps'e düş — en azından çalışır durumda kalsın.
-                const fps = Math.min(30, Math.round(video.getFrameRate?.() || 30));
-                canvasStream = canvas.captureStream(fps);
-                canvasVideoTrack = null;
-            }
-            const audioTracks = destination.stream.getAudioTracks();
-            const combinedStream = new MediaStream([
-                ...canvasStream.getVideoTracks(),
-                ...audioTracks,
-            ]);
-
-            let mimeType = 'video/webm;codecs=vp9,opus';
-            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8,opus';
-            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
-            if (!MediaRecorder.isTypeSupported(mimeType)) {
-                throw new Error('Tarayıcı WebM kaydını desteklemiyor.');
-            }
-
-            recorder = new MediaRecorder(combinedStream, {
-                mimeType,
-                videoBitsPerSecond: 2500000,
-                audioBitsPerSecond: 128000,
-            });
-
-            const chunks = [];
-            recorder.ondataavailable = (e) => {
-                if (e.data && e.data.size > 0) chunks.push(e.data);
-            };
-
-            // KÖK NEDEN (85%'te takılma): recorder.onstop bazı durumlarda
-            // (özellikle sekme arka plana alınıp video oynatması takıldığında,
-            // dolayısıyla 'ended' event'i hiç gelmediğinde) tetiklenmiyor.
-            // Bu yüzden tek başına onstop'a güvenmiyoruz: stop() çağrıldıktan
-            // sonra bir süre onstop gelmezse elimizdeki chunk'lardan zorla blob
-            // oluşturup devam ediyoruz (bkz. finishAndStop / ONSTOP_TIMEOUT_MS).
-            let recordingSettled = false;
-            let resolveRecording, rejectRecording;
-            const recordingDone = new Promise((resolve, reject) => {
-                resolveRecording = resolve;
-                rejectRecording = reject;
-            });
-            const finishRecording = (result, isError) => {
-                if (recordingSettled) return;
-                recordingSettled = true;
-                if (isError) rejectRecording(result);
-                else resolveRecording(result);
-            };
-            recorder.onstop = () => {
-                try {
-                    finishRecording(new Blob(chunks, { type: 'video/webm' }), false);
-                } catch (err) {
-                    finishRecording(err, true);
+                dubBuffer = await decodeAudioBuffer(audioData);
+                if (!dubBuffer) {
+                    throw new Error('Dublaj sesi decode edilemedi (biçim desteklenmiyor olabilir).');
                 }
-            };
-            recorder.onerror = (e) => finishRecording(e.error || new Error('Recorder hatası'), true);
+            }
+
+            const mixBuffer = await mixAudioOffline({
+                original: originalChunks,
+                dub: dubBuffer,
+                duration,
+            });
+
+            // 5) Mediabunny Output — MP4 (H.264 + AAC). fastStart: 'in-memory'
+            //    moov atom'u dosya başına yazar → streamable dosya,
+            //    Instagram/QuickTime/önizleme dostu.
+            output = new Output({
+                format: new Mp4OutputFormat({ fastStart: 'in-memory' }),
+                target: new BufferTarget(),
+            });
+
+            // Video: CanvasSource her add() çağrısında canvas'ın o anki
+            // içeriğini WebCodecs VideoEncoder'a (H.264) verir.
+            // keyFrameInterval: 2sn → seek/önizleme dostu.
+            canvasSource = new CanvasSource(canvas, {
+                codec: 'avc',
+                quality: new Quality({ bitrate: 2500000 }),
+                keyFrameInterval: 2,
+            });
+            output.addVideoTrack(canvasSource, { frameRate: 30 });
+
+            // Ses: offline mix buffer'ı tek seferde AAC'ye kodla. mixBuffer
+            // null ise (hiç ses kaynağı yok) ses track'siz devam edilir.
+            if (mixBuffer) {
+                audioSource = new AudioBufferSource({
+                    codec: 'aac',
+                    quality: new Quality({ bitrate: 128000 }),
+                });
+                output.addAudioTrack(audioSource);
+            }
+
+            await output.start();
+
+            // Ses track'ini hemen besle (offline buffer) — video döngüsüyle
+            // paralel ilerler, video 'ended' olduğunda çoktan bitmiş olur.
+            const audioPromise = mixBuffer && audioSource
+                ? audioSource.add(mixBuffer)
+                : Promise.resolve();
 
             // Overlay layout'larını (konum, font boyutu, satır bölme) BİR KERE
             // hesaplıyoruz — bunlar overlay ekranda kaldığı sürece değişmez.
@@ -401,40 +491,52 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
                 : [];
             const subtitleLineCache = new Map();
 
-            // 5) Frame çizme döngüsü
+            // 5) Frame çizme + encode döngüsü
             let lastCurrentTime = -1;
             let lastAdvanceAt = performance.now();
-            const drawFrame = () => {
-                try {
-                    // readyState < 2 (HAVE_CURRENT_DATA): video'nun o an
-                    // gösterilecek gerçek bir karesi yok. Bu durumda hem eski
-                    // kareyi tekrar canvas'a basmıyoruz hem de (manuel modda)
-                    // kayda boş/donuk bir kare göndermiyoruz.
-                    if (video.readyState < 2) return;
-                    ctx.drawImage(video, 0, 0, width, height);
-                    for (const layout of overlayLayouts) drawPrecomputedOverlay(ctx, layout, video.currentTime);
-                    if (burn && hasSegments) {
-                        const subtitle = getActiveSubtitle(this.segments, video.currentTime);
-                        if (subtitle) drawSubtitleToCanvas(ctx, subtitle, width, height, subtitleLineCache);
-                    }
-                    // Manuel modda: sadece gerçekten yeni bir kare çizildiğinde
-                    // kayda gönder — kayıttaki her kare, canvas'a çizilen gerçek
-                    // bir video karesine 1:1 karşılık gelir.
-                    if (canvasVideoTrack) canvasVideoTrack.requestFrame();
-                    if (duration > 0) {
-                        this.progress = Math.min(95, 5 + Math.round((video.currentTime / duration) * 90));
-                    }
-                    if (video.currentTime > lastCurrentTime) {
-                        lastCurrentTime = video.currentTime;
-                        lastAdvanceAt = performance.now();
-                    }
-                } catch (e) {
-                    console.warn('drawFrame hatası:', e);
+            let lastAddedTime = -1;
+            let loopError = null;
+            let encodedFrames = 0;
+            let fpsWindowStart = performance.now();
+            const drawFrame = async (mediaTime) => {
+                // readyState < 2 (HAVE_CURRENT_DATA): video'nun o an
+                // gösterilecek gerçek bir karesi yok — eski kareyi tekrar
+                // encoder'a göndermek yerine hiçbir şey yapma.
+                if (video.readyState < 2) return;
+                const t = mediaTime ?? video.currentTime;
+                // Timestamp monotonik olmalı: aynı kare iki kez sunulursa
+                // (seek/pause kenar durumları) sessizce atla.
+                if (t <= lastAddedTime) return;
+                ctx.drawImage(video, 0, 0, width, height);
+                for (const layout of overlayLayouts) drawPrecomputedOverlay(ctx, layout, t);
+                if (burn && hasSegments) {
+                    const subtitle = getActiveSubtitle(this.segments, t);
+                    if (subtitle) drawSubtitleToCanvas(ctx, subtitle, width, height, subtitleLineCache);
+                }
+                // Timestamp olarak mediaTime (saniye) kullan — frame sayacı ya
+                // da sabit aralık YOK; VFR kaynaklar bile doğru mux'lanır.
+                // await: encoder geri basıncı doğal şekilde döngüye yansır.
+                lastAddedTime = t;
+                await canvasSource.add(t);
+                // Encode hızı: 1 saniyelik pencerede eklenen kare sayısı.
+                // Kullanıcı "yavaş ama akıcı" ile "takıldı" ayrımını görsün;
+                // ayrı reaktif alanda tutulur (her frame'de status string'i
+                // güncellemek yerine), pencere kapanınca en fazla 1/sn yazılır.
+                encodedFrames++;
+                const nowMs = performance.now();
+                if (nowMs - fpsWindowStart >= 1000) {
+                    this.encodeFps = Math.round((encodedFrames * 1000) / (nowMs - fpsWindowStart));
+                    encodedFrames = 0;
+                    fpsWindowStart = nowMs;
+                }
+                if (duration > 0) {
+                    this.progress = Math.min(95, 5 + Math.round((t / duration) * 90));
+                }
+                if (t > lastCurrentTime) {
+                    lastCurrentTime = t;
+                    lastAdvanceAt = performance.now();
                 }
             };
-
-            // İlk frame'i hemen çiz (video henüz oynamadan)
-            drawFrame();
 
             // requestVideoFrameCallback varsa onu kullan (daha verimli, sadece
             // yeni frame geldiğinde tetiklenir); yoksa requestAnimationFrame.
@@ -445,45 +547,54 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
             const scheduleFrame = () => {
                 if (stopped) return;
                 if (typeof video.requestVideoFrameCallback === 'function') {
-                    rvfcId = video.requestVideoFrameCallback(() => {
-                        drawFrame();
+                    rvfcId = video.requestVideoFrameCallback(async (_now, metadata) => {
+                        try {
+                            await drawFrame(metadata?.mediaTime);
+                        } catch (e) {
+                            loopError = e; // encoder hatası → finalize'da yüzeye çıkar
+                            stopped = true;
+                            return;
+                        }
                         scheduleFrame();
                     });
                 } else {
                     const loop = () => {
                         if (stopped) return;
-                        drawFrame();
-                        rafId = requestAnimationFrame(loop);
+                        drawFrame()
+                            .then(() => { rafId = requestAnimationFrame(loop); })
+                            .catch((e) => { loopError = e; stopped = true; });
                     };
                     rafId = requestAnimationFrame(loop);
                 }
             };
 
-            // Video bitince recorder'ı durdur
-            const STOP_GRACE_MS = 150;
-            const ONSTOP_TIMEOUT_MS = 8000; // onstop bu süre içinde gelmezse elimizdekiyle devam et
-            const finishAndStop = () => {
-                if (stopped) return;
-                stopped = true; // çizim döngüsünü hemen durdur
-                drawFrame(); // son frame
-                setTimeout(() => {
-                    if (recorder && recorder.state !== 'inactive') {
-                        try { recorder.requestData(); } catch (e) {}
-                        try { recorder.stop(); } catch (e) {}
-                        setTimeout(() => {
-                            // onstop hâlâ gelmediyse elimizdeki chunk'larla devam et
-                            if (chunks.length > 0) {
-                                finishRecording(new Blob(chunks, { type: 'video/webm' }), false);
-                            } else {
-                                finishRecording(new Error('Kayıt tamamlanamadı (veri alınamadı). Sekmeyi ön planda tutup tekrar deneyin.'), true);
-                            }
-                        }, ONSTOP_TIMEOUT_MS);
-                    } else if (chunks.length > 0) {
-                        finishRecording(new Blob(chunks, { type: 'video/webm' }), false);
-                    }
-                }, STOP_GRACE_MS);
+            // 6) Bitirme — Mediabunny finalize kaynakları kapatıp MP4
+            //    konteynerini yazar. 'ended' gelmezse (arka planda takılma)
+            //    stallInterval eldeki veriyle finalize eder.
+            let finalized = false;
+            let resolveRecording, rejectRecording;
+            const recordingDone = new Promise((resolve, reject) => {
+                resolveRecording = resolve;
+                rejectRecording = reject;
+            });
+            const finalizeOutput = async () => {
+                if (finalized) return;
+                finalized = true;
+                stopped = true;
+                try {
+                    // Önce ses add()'ının bitmesini bekle — kaynağı add
+                    // in-flight'ken kapatmak yarış koşulu yaratır.
+                    await audioPromise;
+                    try { canvasSource?.close(); } catch (e) {}
+                    try { audioSource?.close(); } catch (e) {}
+                    await output.finalize();
+                    resolveRecording(new Blob([output.target.buffer], { type: 'video/mp4' }));
+                } catch (err) {
+                    rejectRecording(loopError || err);
+                }
             };
-            video.addEventListener('ended', finishAndStop, { once: true });
+
+            video.addEventListener('ended', () => { finalizeOutput(); }, { once: true });
 
             // KÖK NEDEN (85%'te takılma) — oynatma takılması izleyicisi:
             // Sekme arka plana alındığında rVFC/rAF throttle/pause edilebilir,
@@ -491,13 +602,15 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
             // — işlem süresiz beklemede kalırdı. setInterval, rAF'in aksine
             // arka planda da (en fazla ~1sn'ye kadar throttle ile) çalışmaya
             // devam ettiği için buradaki takılmayı güvenilir şekilde yakalar.
+            // NOT: Bu, WebCodecs encode'a geçmekle çözülmedi — video decode
+            // hâlâ realtime. Kalıcı çözüm hybrid decode (bkz. dosya başı).
             const STALL_TIMEOUT_MS = 5000;
             const stallInterval = setInterval(() => {
                 if (stopped) return;
                 if (performance.now() - lastAdvanceAt > STALL_TIMEOUT_MS) {
                     console.warn('Video oynatma takıldı (muhtemelen sekme arka planda) — kayıt eldeki veriyle sonlandırılıyor.');
                     this.status = 'Uyarı: Oynatma yavaşladı, kayıt eldeki veriyle tamamlanıyor…';
-                    finishAndStop();
+                    finalizeOutput();
                 }
             }, 1000);
 
@@ -520,20 +633,18 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
                 }
                 clearInterval(stallInterval);
                 document.removeEventListener('visibilitychange', onVisibilityChange);
-                canvasStream.getTracks().forEach((t) => t.stop());
+                try { canvasSource?.close(); } catch (e) {}
+                try { audioSource?.close(); } catch (e) {}
             });
 
-            // 6) Başlat
+            // 7) Başlat — encode realtime'dır (video oynatma hızıyla ilerler).
             this.status = burn
                 ? 'Video yazıyla yeniden kodlanıyor…'
                 : (dubAudio ? 'Video + ses birleştiriliyor…' : 'Video kopyalanıyor…');
 
-            recorder.start(1000); // her 1sn'de ondataavailable tetiklenir, chunk'lar aşamalı birikir
-
-            // Dublajı video başlangıcında başlat
-            if (dubBufferSource) {
-                try { dubBufferSource.start(0); } catch (e) { console.warn(e); }
-            }
+            // İlk kareyi oynatma başlamadan timestamp 0 ile eklemeyi dene
+            // (readyState hazırsa eklenir; değilse rVFC'nin ilk karesiyle başlar).
+            await drawFrame(0);
 
             // Videoyu oynat + frame çizmeye başla
             try {
@@ -543,10 +654,10 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
             }
             scheduleFrame();
 
-            // 7) Bitene kadar bekle
+            // 8) Bitene kadar bekle
             const blob = await recordingDone;
 
-            // 8) Sonuç
+            // 9) Sonuç
             if (mode === 'preview') {
                 if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
                 this.previewUrl = URL.createObjectURL(blob);
@@ -572,9 +683,7 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
                 video.load();
                 video.remove();
             }
-            if (audioCtx && audioCtx.state !== 'closed') {
-                try { audioCtx.close(); } catch (e) {}
-            }
+            this.encodeFps = null;
             this.busy = false;
         }
     },
@@ -583,7 +692,7 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = this.outputName.replace(/[^a-zA-Z0-9-_]/g, '_') + '.webm';
+        a.download = this.outputName.replace(/[^a-zA-Z0-9-_]/g, '_') + '.mp4';
         document.body.appendChild(a);
         a.click();
         a.remove();

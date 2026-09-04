@@ -40,9 +40,10 @@ altında domain-özerk HTTP altyapısı.
                      model, ucuz) → MP3 R2'ye → "Ses Hazır" badge
 
 [Dublajlı Videoyu İndir] → Mediabunny (tarayıcıda, serverless-uyumlu):
-                           composable conversion: video track'i bit-exact
-                           kopyalanır + TTS AAC mux; isteğe bağlı canvas
-                           altyazı burn-in (WebCodecs H.264 re-encode).
+                           <video> native decode + WebCodecs H.264/AAC
+                           encode → MP4 (fastStart); ses tamamen offline
+                           (decodeAudioData + OfflineAudioContext mix);
+                           isteğe bağlı canvas altyazı burn-in (rVFC).
 ```
 
 ## Güvenlik & Üretime Hazırlık
