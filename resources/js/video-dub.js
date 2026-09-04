@@ -329,6 +329,7 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
         // Video URL'ini CORS problemlerinden kurtarmak için önce same-origin
         // blob URL'e çeviriyoruz. CDN'den gelen cross-origin videolar
         // mediabunny/HTMLCanvasElement gibi yerlerde çalışmıyor.
+        let videoBlob = null;
         this.status = 'Video hazırlanıyor…';
         try {
             const videoResponse = await fetch(this.videoUrl, {method: 'GET'});
@@ -337,7 +338,7 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
                     'Video indirilemedi (HTTP ' + videoResponse.status + '): ' + this.videoUrl,
                 );
             }
-            const videoBlob = await videoResponse.blob();
+            videoBlob = await videoResponse.blob();
             if (videoBlob.size === 0) {
                 throw new Error('Video bozuk (0 byte). Lütfen daha sonra tekrar deneyin.');
             }
