@@ -58,77 +58,7 @@ function drawSubtitleToCanvas(ctx, text, videoWidth, videoHeight, lineCache) {
     }
 }
 
-function computeOverlayLayout(ctx, overlay, videoWidth, videoHeight) {
-    const start = overlay.start ?? 0;
-    const end = overlay.end ?? null;
-    const b = overlay.bbox || {};
-    // İngilizce bbox baz alınır; Türkçe genellikle %20-30 daha uzun olur.
-    // Orijinal metnin tamamen örtülmesi için padding ve genişlik toleranslı.
-    const padX = videoWidth * 0.04;
-    const padY = videoHeight * 0.025;
-    const x = Math.max(0, (b.left / 100) * videoWidth - padX);
-    const y = Math.max(0, (b.top / 100) * videoHeight - padY);
-    const boxW = Math.min(videoWidth - x, ((b.width / 100) * videoWidth) + padX * 2.5);
-    const boxH = Math.min(videoHeight - y, ((b.height / 100) * videoHeight) + padY * 2.5);
-    if (boxW < videoWidth * 0.05 || boxH < videoHeight * 0.015) return null;
-    const radius = Math.min(boxH * 0.2, 16);
-    const innerW = boxW * 0.9;
-    const innerH = boxH * 0.82;
-    let fontSize = Math.min(innerH * 0.5, videoHeight * 0.04);
-    let lineHeight = fontSize * 1.3;
-    ctx.font = `bold ${Math.round(fontSize)}px sans-serif`;
-    let lines = wrapLines(ctx, overlay.translation, innerW);
-    while (lines.length * lineHeight > innerH && fontSize > videoHeight * 0.012) {
-        fontSize -= Math.max(1, Math.round(fontSize * 0.06));
-        ctx.font = `bold ${Math.round(fontSize)}px sans-serif`;
-        lines = wrapLines(ctx, overlay.translation, innerW);
-        lineHeight = fontSize * 1.3;
-    }
-    fontSize = Math.round(fontSize);
-    const centerX = x + boxW / 2;
-    const totalHeight = lines.length * lineHeight;
-    const firstLineY = y + (boxH - totalHeight) / 2 + lineHeight / 2;
-    return {
-        start, end, x, y, boxW, boxH, radius,
-        font: `bold ${fontSize}px sans-serif`,
-        lines, lineHeight, centerX, firstLineY,
-        shadowBlur: Math.round(videoHeight * 0.006),
-    };
-}
-
-// GERÇEK ZAMANLI DÖNGÜDE ÇAĞRILIR — burada artık ctx.measureText YOK.
-// Tüm layout hesabı (font boyutu arama, satır bölme) computeOverlayLayout'ta
-// bir kere yapıldı; burada sadece hazır değerlerle çiziyoruz. Önceki halde bu
-// çizim, her karede measureText'i tekrar tekrar çağırıyordu — ana thread'i
-// yavaşlatıp gerçek-zamanlı kayıtta donmalara (stutter) ve toplam sürenin
 // video içeriğinden uzun çıkmasına (15sn → 22sn) yol açan asıl sebep buydu.
-function drawPrecomputedOverlay(ctx, layout, seconds) {
-    if (seconds < layout.start || (layout.end !== null && seconds > layout.end)) return;
-    const { x, y, boxW, boxH, radius, font, lines, lineHeight, centerX, firstLineY, shadowBlur } = layout;
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(x, y, boxW, boxH, radius);
-    ctx.fillStyle = 'rgba(255, 255, 255, 1)';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
-    ctx.shadowBlur = shadowBlur;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(17, 17, 17, 1)';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = font;
-    let lineY = firstLineY;
-    for (const line of lines) {
-        ctx.fillText(line, centerX, lineY);
-        lineY += lineHeight;
-    }
-    ctx.restore();
-}
-
 function wrapLines(ctx, text, maxWidth) {
     const words = text.split(/\s+/);
     const lines = [];
@@ -144,6 +74,90 @@ function wrapLines(ctx, text, maxWidth) {
     }
     if (currentLine) lines.push(currentLine);
     return lines;
+}
+// Gerçek zamanlı döngüde çağrılır
+function drawFrameOverlays(ctx, overlays, seconds, videoWidth, videoHeight) {
+    for (const ov of overlays || []) {
+        drawStyledOverlay(ctx, ov.translation, ov.style || {}, videoWidth, videoHeight, ov.start ?? 0, ov.end ?? null, seconds);
+    }
+}
+
+
+function parseRGBA(rgba) {
+    const m = rgba.match(/rgba?\(([^)]+)\)/);
+    if (!m) return null;
+    const parts = m[1].split(',').map(s => parseFloat(s.trim()));
+    return { r: parts[0] || 0, g: parts[1] || 0, b: parts[2] || 0, a: parts[3] ?? 1 };
+}
+
+// Gemini'den gelen stil objesine göre overlay çizer.
+// style: { fontFamily, fontWeight, fontSize, fontStyle, color, backgroundColor,
+//          textAlign, padding, borderRadius, maxWidth, textShadow, opacity }
+function drawStyledOverlay(ctx, text, style, videoWidth, videoHeight, start, end, seconds) {
+    if (seconds < start || (end !== null && seconds > end)) return;
+
+    const font = style.fontFamily || 'Inter, sans-serif';
+    const weight = style.fontWeight || '600';
+    const size = style.fontSize || Math.round(videoHeight * 0.035);
+    const fstyle = style.fontStyle || 'normal';
+    const color = style.color || '#FFFFFF';
+    const bg = style.backgroundColor || 'rgba(0,0,0,0.85)';
+    const align = style.textAlign || 'center';
+    const padding = parseFloat(String(style.padding)) || Math.round(videoWidth * 0.02);
+    const radius = parseFloat(String(style.borderRadius)) || Math.min(size * 0.4, 16);
+    const maxWidthPct = parseFloat(String(style.maxWidth)) || 90;
+    const textShadow = style.textShadow && style.textShadow !== 'none' ? style.textShadow : null;
+    const opacity = style.opacity !== undefined ? parseFloat(String(style.opacity)) : 1;
+
+    const fontStr = `${fstyle} ${weight} ${size}px ${font}`;
+    ctx.font = fontStr;
+    ctx.textAlign = align;
+    ctx.textBaseline = 'middle';
+
+    const maxWidthPx = (maxWidthPct / 100) * videoWidth - padding * 2;
+    const lines = wrapLines(ctx, text, maxWidthPx);
+    const lineHeight = size * 1.3;
+    const totalHeight = lines.length * lineHeight;
+
+    const boxW = Math.min(videoWidth * (maxWidthPct / 100), maxWidthPx + padding * 2);
+    const boxH = totalHeight + padding * 2;
+    const boxX = (videoWidth - boxW) / 2;
+    const boxY = videoHeight * 0.15; // üst bölgede tut (Gemini bbox vermese de)
+
+    ctx.save();
+    ctx.globalAlpha = opacity;
+
+    // Beyaz/gri bulut arka plan
+    const bgColor = parseRGBA(bg) || { r: 0, g: 0, b: 0, a: 0.85 };
+    ctx.beginPath();
+    ctx.roundRect(boxX, boxY, boxW, boxH, radius);
+    ctx.fillStyle = `rgba(${bgColor.r},${bgColor.g},${bgColor.b},${bgColor.a})`;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowBlur = Math.round(videoHeight * 0.006);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Kenarlık (bulutun kendi renginde)
+    ctx.strokeStyle = `rgba(${bgColor.r},${bgColor.g},${bgColor.b},${Math.min(bgColor.a + 0.1, 1)})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Metin
+    ctx.fillStyle = color;
+    if (textShadow) {
+        ctx.shadowColor = 'rgba(0,0,0,0.6)';
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 1;
+        ctx.shadowOffsetY = 1;
+    }
+    const firstLineY = boxY + padding + lineHeight / 2;
+    let lineY = firstLineY;
+    for (const line of lines) {
+        ctx.fillText(line, boxX + boxW / 2, lineY);
+        lineY += lineHeight;
+    }
+
+    ctx.restore();
 }
 
 // ---------------------------------------------------------------------------
@@ -488,13 +502,7 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
                 : Promise.resolve();
 
             // Overlay layout'larını (konum, font boyutu, satır bölme) BİR KERE
-            // hesaplıyoruz — bunlar overlay ekranda kaldığı sürece değişmez.
-            // Gerçek zamanlı çizim döngüsünde bunu tekrar tekrar yapmak, ana
-            // thread'i yavaşlatıp kayıtta donmalara (stutter) ve toplam sürenin
-            // video içeriğinden uzun çıkmasına yol açan asıl nedendi.
-            const overlayLayouts = hasOverlays
-                ? this.overlays.map((o) => computeOverlayLayout(ctx, o, width, height)).filter(Boolean)
-                : [];
+            // Overlay'lar Gemini stiliyle çizilir — her karede doğrudan this.overlays kullanılır.
             const subtitleLineCache = new Map();
 
             // 5) Frame çizme + encode döngüsü
@@ -514,7 +522,7 @@ registerAlpineComponent('dubCombiner', (videoUrl, audioUrl, outputName, segments
                 // (seek/pause kenar durumları) sessizce atla.
                 if (t <= lastAddedTime) return;
                 ctx.drawImage(video, 0, 0, width, height);
-                for (const layout of overlayLayouts) drawPrecomputedOverlay(ctx, layout, t);
+                drawFrameOverlays(ctx, this.overlays, t, width, height);
                 if (burn && hasSegments) {
                     const subtitle = getActiveSubtitle(this.segments, t);
                     if (subtitle) drawSubtitleToCanvas(ctx, subtitle, width, height, subtitleLineCache);

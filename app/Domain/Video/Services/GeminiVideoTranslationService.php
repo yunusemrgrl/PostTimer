@@ -177,7 +177,20 @@ You are a professional video localizer. Analyze the attached video and produce S
   "overlays": [
     {"start": <seconds when the text appears, or null if visible from the beginning>,
      "end": <seconds when it disappears, or null if visible until the end>,
-     "bbox": {"left": <0-100>, "top": <0-100>, "width": <0-100>, "height": <0-100>},
+     "style": {
+       "fontFamily": "<font-family, e.g. 'Inter, sans-serif' or 'Georgia, serif'>",
+       "fontWeight": "<300|400|500|600|700|800|900>",
+       "fontSize": <px, number>,
+       "fontStyle": "<normal|italic>",
+       "color": "<hex color, e.g. #FFFFFF>",
+       "backgroundColor": "<hex color with alpha, e.g. rgba(0,0,0,0.85)>",
+       "textAlign": "<left|center|right>",
+       "padding": "<px, e.g. 12px>",
+       "borderRadius": "<px, e.g. 6px>",
+       "maxWidth": "<%, e.g. 90>",
+       "textShadow": "<css text-shadow or 'none'>",
+       "opacity": <0-1 number, for text with see-through backgrounds>
+     }
      "text": "<the on-screen text as written>",
      "translation": "<the same text translated into {$targetLanguage}>"}
   ]
@@ -271,21 +284,12 @@ PROMPT;
                 continue;
             }
 
-            $bbox = is_array($overlay['bbox'] ?? null) ? $overlay['bbox'] : [];
-
-            $left = $this->clampPercent($bbox['left'] ?? null);
-            $top = $this->clampPercent($bbox['top'] ?? null);
-            $width = $this->clampPercent($bbox['width'] ?? null);
-            $height = $this->clampPercent($bbox['height'] ?? null);
-
-            if ($left === null || $top === null || $width === null || $height === null) {
-                continue;
-            }
+            $style = is_array($overlay['style'] ?? null) ? $overlay['style'] : [];
 
             $overlays[] = [
-                'start' => is_numeric($overlay['start'] ?? null) ? max(0.0, (float) $overlay['start']) : null,
-                'end' => is_numeric($overlay['end'] ?? null) ? max(0.0, (float) $overlay['end']) : null,
-                'bbox' => ['left' => $left, 'top' => $top, 'width' => $width, 'height' => $height],
+                'start' => is_numeric($overlay['start'] ?? null) ? max(0.0, (float) ($overlay['start'])) : null,
+                'end' => is_numeric($overlay['end'] ?? null) ? max(0.0, (float) ($overlay['end'])) : null,
+                'style' => $style,
                 'text' => $text,
                 'translation' => $translation,
             ];
