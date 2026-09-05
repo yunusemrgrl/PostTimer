@@ -205,6 +205,7 @@ Rules:
 - Translate the meaning naturally (not word-by-word) into {$targetLanguage}.
 - Every text PERMANENTLY rendered on the video frame (speech bubbles, caption boxes, burned-in titles) MUST also appear in overlays: bbox is the text's background box as percentages of the frame measured from the top-left corner (left + width <= 100, top + height <= 100), padded slightly so it fully covers the text AND its background box/bubble.
 - One overlay entry per distinct text; start/end describe when it is visible on screen.
+- TIMESTAMP PRECISION: all "start"/"end" values MUST be precise fractional seconds with up to 2 decimals (e.g. 3.12, 6.47) measured from the actual moment the speech/text begins or ends in the video. NEVER round to whole seconds — rounding causes overlapping or premature cuts between consecutive items. Adjacent items must not overlap: the next item's start must be >= the previous item's end.
 - on_screen_text lists those same texts without position, kept in the original language. Both may be empty; never invent text that is not visible.
 - Output only the JSON object.
 PROMPT;

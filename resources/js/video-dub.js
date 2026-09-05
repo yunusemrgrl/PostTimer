@@ -15,7 +15,7 @@ import {
 
 function getActiveSubtitle(segments, currentTime) {
     for (const seg of segments) {
-        if (currentTime >= (seg.start ?? 0) && currentTime <= (seg.end ?? 0)) {
+        if (currentTime >= (seg.start ?? 0) && currentTime < (seg.end ?? 0)) {
             return seg.translation || null;
         }
     }
@@ -94,7 +94,9 @@ function parseRGBA(rgba) {
 // style: { fontFamily, fontWeight, fontSize, fontStyle, color, backgroundColor,
 //          textAlign, padding, borderRadius, maxWidth, textShadow, opacity }
 function drawStyledOverlay(ctx, text, style, videoWidth, videoHeight, start, end, seconds) {
-    if (seconds < start || (end !== null && seconds > end)) return;
+    // Bitiş DAHİL DEĞİL [start, end): Gemini timestamp'leri tam sayıya
+    // yuvarladığında (ör. 3.12 -> 3) ardışık kayıtlar aynı anda aktif olmasın.
+    if (seconds < start || (end !== null && seconds >= end)) return;
 
     const font = style.fontFamily || 'Inter, sans-serif';
     const weight = style.fontWeight || '600';
