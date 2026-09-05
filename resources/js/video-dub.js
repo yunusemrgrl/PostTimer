@@ -109,6 +109,9 @@ function drawStyledOverlay(ctx, text, style, videoWidth, videoHeight, start, end
     const radius = parseFloat(String(style.borderRadius)) || Math.min(size * 0.4, 16);
     const maxWidthPct = parseFloat(String(style.maxWidth)) || 90;
     const textShadow = style.textShadow && style.textShadow !== 'none' ? style.textShadow : null;
+    // ORIJINAL YAZI VIDEODAN SILINEMEZ — overlay onu örten tek araç. Bu yüzden
+    // yarı saydam stil (opacity < 1 / rgba alpha < 1) Gemini'den gelse bile
+    // ZORUNLU olarak opaklaştırılır; yoksa alttan orijinal metin sızar.
     const opacity = style.opacity !== undefined ? parseFloat(String(style.opacity)) : 1;
 
     const fontStr = `${fstyle} ${weight} ${size}px ${font}`;
@@ -127,10 +130,11 @@ function drawStyledOverlay(ctx, text, style, videoWidth, videoHeight, start, end
     const boxY = videoHeight * 0.15; // üst bölgede tut (Gemini bbox vermese de)
 
     ctx.save();
-    ctx.globalAlpha = opacity;
+    ctx.globalAlpha = 1; // daima opak — overlay orijinal yazıyı örten tek araç
 
-    // Beyaz/gri bulut arka plan
-    const bgColor = parseRGBA(bg) || { r: 0, g: 0, b: 0, a: 0.85 };
+    // Beyaz/gri bulut arka plan (alpha zorla 1'e çekilir)
+    const bgColorRaw = parseRGBA(bg) || { r: 0, g: 0, b: 0, a: 0.85 };
+    const bgColor = { ...bgColorRaw, a: 1 };
     ctx.beginPath();
     ctx.roundRect(boxX, boxY, boxW, boxH, radius);
     ctx.fillStyle = `rgba(${bgColor.r},${bgColor.g},${bgColor.b},${bgColor.a})`;
